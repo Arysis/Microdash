@@ -1,0 +1,65 @@
+# Barème micro-entreprise 2026.
+# Valeurs indicatives relevées le 2026-10-05, à vérifier sur urssaf.fr avant la mise en production.
+# Pour une nouvelle année : copier ce fichier en <année>.yaml et mettre à jour les valeurs.
+# Les taux sont des fractions (0.123 = 12,3 %), les montants sont en euros.
+
+annee: 2026
+
+categories:
+  vente_bic:
+    libelle: Vente de marchandises (BIC)
+    groupe_plafond: vente
+    plafond_ca: 203100
+    abattement: 0.71
+    versement_liberatoire: 0.010
+    cotisations:
+      - { depuis: 2026-01-01, taux: 0.123 }
+    tva_franchise: { base: 85000, majore: 93500 }
+
+  services_bic:
+    libelle: Prestations de services commerciales ou artisanales (BIC)
+    groupe_plafond: services
+    plafond_ca: 83600
+    abattement: 0.50
+    versement_liberatoire: 0.017
+    cotisations:
+      - { depuis: 2026-01-01, taux: 0.212 }
+    tva_franchise: { base: 37500, majore: 41250 }
+
+  liberal_ssi:
+    libelle: Profession libérale non réglementée, SSI (BNC)
+    groupe_plafond: services
+    plafond_ca: 83600
+    abattement: 0.34
+    versement_liberatoire: 0.022
+    cotisations:
+      - { depuis: 2026-01-01, taux: 0.256 }
+    tva_franchise: { base: 37500, majore: 41250 }
+
+  liberal_cipav:
+    libelle: Profession libérale réglementée, CIPAV (BNC)
+    groupe_plafond: services
+    plafond_ca: 83600
+    abattement: 0.34
+    versement_liberatoire: 0.022
+    cotisations:
+      - { depuis: 2026-01-01, taux: 0.232 }
+    tva_franchise: { base: 37500, majore: 41250 }
+
+# Plafond global d'une activité mixte (vente + services), dont au plus le plafond services.
+plafond_mixte: 203100
+
+# Réduction ACRE selon la date de début d'activité (à vérifier).
+# Elle s'applique du début d'activité à la fin du 3e trimestre civil qui suit.
+acre:
+  - { debut_activite_depuis: 2019-01-01, reduction: 0.50 }
+  - { debut_activite_depuis: 2026-07-01, reduction: 0.25 }
+
+# Contribution à la formation professionnelle, selon la nature de l'activité.
+cfp:
+  commercant: 0.001
+  artisan: 0.003
+  liberal: 0.002
+
+# Revenu imposable minimum après abattement (en euros).
+abattement_minimum: 305
