@@ -1,0 +1,45 @@
+# Microdash : front (web), API (api) et base (db).
+# Local : docker compose up --build   → http://localhost:8080
+# Prod  : fixer MICRODASH_VERSION dans .env, puis docker compose pull && docker compose up -d
+
+name: microdash
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: microdash
+      POSTGRES_USER: microdash
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U microdash -d microdash"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    image: ${IMAGE_PREFIX:-ghcr.io/arysis/microdash}-api:${MICRODASH_VERSION:-dev}
+    build: ./api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://microdash:${POSTGRES_PASSWORD}@db:5432/microdash?sslmode=disable
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    image: ${IMAGE_PREFIX:-ghcr.io/arysis/microdash}-web:${MICRODASH_VERSION:-dev}
+    build: ./web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

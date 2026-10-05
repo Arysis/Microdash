@@ -1,0 +1,552 @@
+// Package httpapi expose l'API REST JSON de Microdash.
+package httpapi
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
+	"net/mail"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/arysis/microdash/api/internal/bareme"
+	"github.com/arysis/microdash/api/internal/calc"
+	"github.com/arysis/microdash/api/internal/store"
+)
+
+const (
+	cookieSession = "microdash_session"
+	dureeSession  = 30 * 24 * time.Hour
+	formatDate    = "2006-01-02"
+)
+
+type Server struct {
+	Store        *store.Store
+	Baremes      *bareme.Set
+	CookieSecure bool
+	now          func() time.Time
+}
+
+func New(st *store.Store, b *bareme.Set, cookieSecure bool) *Server {
+	return &Server{Store: st, Baremes: b, CookieSecure: cookieSecure, now: time.Now}
+}
+
+func (s *Server) Routes() http.Handler {
+	r := chi.NewRouter()
+	r.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer)
+	r.Use(middleware.Timeout(15 * time.Second))
+
+	r.Route("/api", func(r chi.Router) {
+		r.Get("/health", s.health)
+		r.Get("/baremes/{annee}", s.getBareme)
+		r.Group(func(r chi.Router) {
+			r.Use(exigerJSON)
+			r.Post("/auth/register", s.register)
+			r.Post("/auth/login", s.login)
+			r.Post("/auth/logout", s.logout)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(s.authentifier, exigerJSON)
+			r.Get("/me", s.me)
+			r.Delete("/me", s.deleteMe)
+			r.Get("/profil", s.getProfil)
+			r.Put("/profil", s.putProfil)
+			r.Get("/transactions", s.listTransactions)
+			r.Post("/transactions", s.createTransaction)
+			r.Put("/transactions/{id}", s.updateTransaction)
+			r.Delete("/transactions/{id}", s.deleteTransaction)
+			r.Get("/tableau-de-bord", s.tableauDeBord)
+		})
+	})
+	return r
+}
+
+// --- Aides ---
+
+type erreurAPI struct {
+	Erreur string `json:"erreur"`
+}
+
+func ecrireJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func erreur(w http.ResponseWriter, code int, msg string) {
+	ecrireJSON(w, code, erreurAPI{Erreur: msg})
+}
+
+func erreurInterne(w http.ResponseWriter, r *http.Request, err error) {
+	slog.Error("erreur interne", "chemin", r.URL.Path, "err", err)
+	erreur(w, http.StatusInternalServerError, "erreur interne")
+}
+
+func lireJSON(w http.ResponseWriter, r *http.Request, v any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		erreur(w, http.StatusBadRequest, "JSON invalide : "+err.Error())
+		return false
+	}
+	return true
+}
+
+// exigerJSON refuse les écritures qui ne sont pas en JSON : un formulaire d'un autre site
+// ne peut pas en envoyer sans requête préalable CORS, ce qui protège des attaques CSRF.
+func exigerJSON(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost, http.MethodPut, http.MethodPatch:
+			if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+				erreur(w, http.StatusUnsupportedMediaType, "Content-Type application/json requis")
+				return
+			}
+		case http.MethodDelete:
+			if r.Header.Get("X-Requested-With") == "" && !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+				erreur(w, http.StatusUnsupportedMediaType, "en-tête X-Requested-With requis")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+	if err := s.Store.Ping(r.Context()); err != nil {
+		erreur(w, http.StatusServiceUnavailable, "base indisponible")
+		return
+	}
+	ecrireJSON(w, http.StatusOK, map[string]string{"statut": "ok"})
+}
+
+// --- Authentification ---
+
+type cleCtx struct{}
+
+func userID(ctx context.Context) int64 { return ctx.Value(cleCtx{}).(int64) }
+
+func hacherJeton(jeton string) []byte {
+	h := sha256.Sum256([]byte(jeton))
+	return h[:]
+}
+
+func (s *Server) authentifier(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := r.Cookie(cookieSession)
+		if err != nil {
+			erreur(w, http.StatusUnauthorized, "non connecté")
+			return
+		}
+		id, err := s.Store.SessionUser(r.Context(), hacherJeton(c.Value))
+		if errors.Is(err, store.ErrNotFound) {
+			erreur(w, http.StatusUnauthorized, "session expirée")
+			return
+		}
+		if err != nil {
+			erreurInterne(w, r, err)
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), cleCtx{}, id)))
+	})
+}
+
+func (s *Server) ouvrirSession(w http.ResponseWriter, r *http.Request, id int64) bool {
+	brut := make([]byte, 32)
+	if _, err := rand.Read(brut); err != nil {
+		erreurInterne(w, r, err)
+		return false
+	}
+	jeton := base64.RawURLEncoding.EncodeToString(brut)
+	expire := s.now().Add(dureeSession)
+	if err := s.Store.CreateSession(r.Context(), hacherJeton(jeton), id, expire); err != nil {
+		erreurInterne(w, r, err)
+		return false
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: cookieSession, Value: jeton, Path: "/api", Expires: expire,
+		HttpOnly: true, Secure: s.CookieSecure, SameSite: http.SameSiteLaxMode,
+	})
+	return true
+}
+
+type identifiants struct {
+	Email      string `json:"email"`
+	MotDePasse string `json:"mot_de_passe"`
+}
+
+func normaliserEmail(e string) (string, bool) {
+	e = strings.ToLower(strings.TrimSpace(e))
+	a, err := mail.ParseAddress(e)
+	return e, err == nil && a.Address == e
+}
+
+func (s *Server) register(w http.ResponseWriter, r *http.Request) {
+	var in identifiants
+	if !lireJSON(w, r, &in) {
+		return
+	}
+	email, ok := normaliserEmail(in.Email)
+	if !ok {
+		erreur(w, http.StatusBadRequest, "adresse e-mail invalide")
+		return
+	}
+	if len(in.MotDePasse) < 10 {
+		erreur(w, http.StatusBadRequest, "le mot de passe doit faire au moins 10 caractères")
+		return
+	}
+	hash, err := hashPassword(in.MotDePasse)
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	id, err := s.Store.CreateUser(r.Context(), email, hash)
+	if errors.Is(err, store.ErrEmailPris) {
+		erreur(w, http.StatusConflict, err.Error())
+		return
+	}
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	if s.ouvrirSession(w, r, id) {
+		ecrireJSON(w, http.StatusCreated, map[string]any{"id": id, "email": email, "profil_complet": false})
+	}
+}
+
+func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+	var in identifiants
+	if !lireJSON(w, r, &in) {
+		return
+	}
+	email, _ := normaliserEmail(in.Email)
+	u, err := s.Store.UserByEmail(r.Context(), email)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		erreurInterne(w, r, err)
+		return
+	}
+	if u == nil || !checkPassword(in.MotDePasse, u.PasswordHash) {
+		erreur(w, http.StatusUnauthorized, "e-mail ou mot de passe incorrect")
+		return
+	}
+	if s.ouvrirSession(w, r, u.ID) {
+		s.ecrireMe(w, r, u)
+	}
+}
+
+func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie(cookieSession); err == nil {
+		if err := s.Store.DeleteSession(r.Context(), hacherJeton(c.Value)); err != nil {
+			erreurInterne(w, r, err)
+			return
+		}
+	}
+	http.SetCookie(w, &http.Cookie{Name: cookieSession, Value: "", Path: "/api", MaxAge: -1, HttpOnly: true, Secure: s.CookieSecure, SameSite: http.SameSiteLaxMode})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) ecrireMe(w http.ResponseWriter, r *http.Request, u *store.User) {
+	_, err := s.Store.Profil(r.Context(), u.ID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		erreurInterne(w, r, err)
+		return
+	}
+	ecrireJSON(w, http.StatusOK, map[string]any{"id": u.ID, "email": u.Email, "profil_complet": err == nil})
+}
+
+func (s *Server) me(w http.ResponseWriter, r *http.Request) {
+	u, err := s.Store.UserByID(r.Context(), userID(r.Context()))
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	s.ecrireMe(w, r, u)
+}
+
+func (s *Server) deleteMe(w http.ResponseWriter, r *http.Request) {
+	if err := s.Store.DeleteUser(r.Context(), userID(r.Context())); err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: cookieSession, Value: "", Path: "/api", MaxAge: -1, HttpOnly: true, Secure: s.CookieSecure, SameSite: http.SameSiteLaxMode})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// --- Barème ---
+
+type categorieJSON struct {
+	Code string `json:"code"`
+	bareme.Categorie
+}
+
+func (s *Server) getBareme(w http.ResponseWriter, r *http.Request) {
+	annee, err := strconv.Atoi(chi.URLParam(r, "annee"))
+	if err != nil {
+		erreur(w, http.StatusBadRequest, "année invalide")
+		return
+	}
+	b, exact := s.Baremes.Pour(annee)
+	cats := []categorieJSON{}
+	for _, code := range []string{"vente_bic", "services_bic", "liberal_ssi", "liberal_cipav"} {
+		if c, ok := b.Categories[code]; ok {
+			cats = append(cats, categorieJSON{Code: code, Categorie: c})
+		}
+	}
+	for code, c := range b.Categories { // catégories ajoutées dans un fichier de barème
+		switch code {
+		case "vente_bic", "services_bic", "liberal_ssi", "liberal_cipav":
+		default:
+			cats = append(cats, categorieJSON{Code: code, Categorie: c})
+		}
+	}
+	ecrireJSON(w, http.StatusOK, map[string]any{
+		"annee": b.Annee, "exact": exact, "categories": cats, "cfp": b.CFP,
+		"annees_disponibles": s.Baremes.Annees(),
+	})
+}
+
+// --- Profil ---
+
+type profilJSON struct {
+	store.Profil
+	DebutActivite string `json:"debut_activite"`
+}
+
+func (s *Server) getProfil(w http.ResponseWriter, r *http.Request) {
+	p, err := s.Store.Profil(r.Context(), userID(r.Context()))
+	if errors.Is(err, store.ErrNotFound) {
+		erreur(w, http.StatusNotFound, "profil non renseigné")
+		return
+	}
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	ecrireJSON(w, http.StatusOK, profilJSON{Profil: *p, DebutActivite: p.DebutActivite.Format(formatDate)})
+}
+
+func (s *Server) putProfil(w http.ResponseWriter, r *http.Request) {
+	var in profilJSON
+	if !lireJSON(w, r, &in) {
+		return
+	}
+	debut, err := time.Parse(formatDate, in.DebutActivite)
+	if err != nil {
+		erreur(w, http.StatusBadRequest, "date de début d'activité invalide (AAAA-MM-JJ)")
+		return
+	}
+	if in.Periodicite != "mensuelle" && in.Periodicite != "trimestrielle" {
+		erreur(w, http.StatusBadRequest, "périodicité : mensuelle ou trimestrielle")
+		return
+	}
+	in.Profil.DebutActivite = debut
+	b, _ := s.Baremes.Pour(s.now().Year())
+	if err := calc.Valider(versCalc(in.Profil), b); err != nil {
+		erreur(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.Store.SaveProfil(r.Context(), userID(r.Context()), in.Profil); err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	ecrireJSON(w, http.StatusOK, in)
+}
+
+func versCalc(p store.Profil) calc.Profil {
+	return calc.Profil{
+		Categorie: p.Categorie, CategorieSecondaire: p.CategorieSecondaire, NatureCFP: p.NatureCFP,
+		DebutActivite: p.DebutActivite, ACRE: p.ACRE, VersementLiberatoire: p.VersementLiberatoire,
+	}
+}
+
+// --- Transactions ---
+
+type transactionJSON struct {
+	store.Transaction
+	Date string `json:"date"`
+}
+
+func versJSON(t store.Transaction) transactionJSON {
+	return transactionJSON{Transaction: t, Date: t.Date.Format(formatDate)}
+}
+
+func (s *Server) listTransactions(w http.ResponseWriter, r *http.Request) {
+	maintenant := s.now()
+	du := time.Date(maintenant.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+	au := time.Date(maintenant.Year(), 12, 31, 0, 0, 0, 0, time.UTC)
+	var err error
+	if v := r.URL.Query().Get("du"); v != "" {
+		if du, err = time.Parse(formatDate, v); err != nil {
+			erreur(w, http.StatusBadRequest, "paramètre du invalide")
+			return
+		}
+	}
+	if v := r.URL.Query().Get("au"); v != "" {
+		if au, err = time.Parse(formatDate, v); err != nil {
+			erreur(w, http.StatusBadRequest, "paramètre au invalide")
+			return
+		}
+	}
+	txs, err := s.Store.Transactions(r.Context(), userID(r.Context()), du, au)
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	res := make([]transactionJSON, 0, len(txs))
+	for _, t := range txs {
+		res = append(res, versJSON(t))
+	}
+	ecrireJSON(w, http.StatusOK, res)
+}
+
+// validerTransaction contrôle une saisie et complète la catégorie d'une recette.
+func (s *Server) validerTransaction(w http.ResponseWriter, r *http.Request, in *transactionJSON) bool {
+	d, err := time.Parse(formatDate, in.Date)
+	if err != nil {
+		erreur(w, http.StatusBadRequest, "date invalide (AAAA-MM-JJ)")
+		return false
+	}
+	in.Transaction.Date = d
+	if in.Centimes <= 0 {
+		erreur(w, http.StatusBadRequest, "le montant doit être positif")
+		return false
+	}
+	in.Libelle = strings.TrimSpace(in.Libelle)
+	in.Tiers = strings.TrimSpace(in.Tiers)
+	switch in.Type {
+	case calc.Depense:
+		in.Categorie = ""
+	case calc.Recette:
+		in.Poste = ""
+		p, err := s.Store.Profil(r.Context(), userID(r.Context()))
+		if errors.Is(err, store.ErrNotFound) {
+			erreur(w, http.StatusConflict, "renseigne ton profil avant de saisir une recette")
+			return false
+		}
+		if err != nil {
+			erreurInterne(w, r, err)
+			return false
+		}
+		if in.Categorie == "" {
+			in.Categorie = p.Categorie
+		}
+		if in.Categorie != p.Categorie && in.Categorie != p.CategorieSecondaire {
+			erreur(w, http.StatusBadRequest, "catégorie de recette absente du profil")
+			return false
+		}
+	default:
+		erreur(w, http.StatusBadRequest, "type : recette ou depense")
+		return false
+	}
+	return true
+}
+
+func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
+	var in transactionJSON
+	if !lireJSON(w, r, &in) || !s.validerTransaction(w, r, &in) {
+		return
+	}
+	t, err := s.Store.CreateTransaction(r.Context(), userID(r.Context()), in.Transaction)
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	ecrireJSON(w, http.StatusCreated, versJSON(*t))
+}
+
+func idParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		erreur(w, http.StatusBadRequest, "identifiant invalide")
+		return 0, false
+	}
+	return id, true
+}
+
+func (s *Server) updateTransaction(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r)
+	if !ok {
+		return
+	}
+	var in transactionJSON
+	if !lireJSON(w, r, &in) || !s.validerTransaction(w, r, &in) {
+		return
+	}
+	in.ID = id
+	t, err := s.Store.UpdateTransaction(r.Context(), userID(r.Context()), in.Transaction)
+	if errors.Is(err, store.ErrNotFound) {
+		erreur(w, http.StatusNotFound, "transaction introuvable")
+		return
+	}
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	ecrireJSON(w, http.StatusOK, versJSON(*t))
+}
+
+func (s *Server) deleteTransaction(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r)
+	if !ok {
+		return
+	}
+	err := s.Store.DeleteTransaction(r.Context(), userID(r.Context()), id)
+	if errors.Is(err, store.ErrNotFound) {
+		erreur(w, http.StatusNotFound, "transaction introuvable")
+		return
+	}
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// --- Tableau de bord ---
+
+func (s *Server) tableauDeBord(w http.ResponseWriter, r *http.Request) {
+	annee := s.now().Year()
+	if v := r.URL.Query().Get("annee"); v != "" {
+		a, err := strconv.Atoi(v)
+		if err != nil || a < 2000 || a > 2100 {
+			erreur(w, http.StatusBadRequest, "année invalide")
+			return
+		}
+		annee = a
+	}
+	uid := userID(r.Context())
+	p, err := s.Store.Profil(r.Context(), uid)
+	if errors.Is(err, store.ErrNotFound) {
+		erreur(w, http.StatusConflict, "profil non renseigné")
+		return
+	}
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	txs, err := s.Store.Transactions(r.Context(), uid, time.Date(annee, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(annee, 12, 31, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	entrees := make([]calc.Transaction, 0, len(txs))
+	for _, t := range txs {
+		entrees = append(entrees, calc.Transaction{Type: t.Type, Date: t.Date, Centimes: t.Centimes, Categorie: t.Categorie})
+	}
+	res, err := calc.Calculer(annee, versCalc(*p), entrees, s.Baremes)
+	if err != nil {
+		erreur(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	ecrireJSON(w, http.StatusOK, res)
+}
