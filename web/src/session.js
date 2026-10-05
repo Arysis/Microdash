@@ -14,7 +14,20 @@ export async function chargerSession() {
   session.charge = true
 }
 
+// La copie hors ligne des réponses de l'API (cache « api » du service worker) contient
+// des données financières : on l'efface dès que la personne quitte son compte.
+async function viderCopieLocale() {
+  if ('caches' in window) await caches.delete('api').catch(() => {})
+}
+
 export async function deconnecter() {
   await api.post('/auth/logout')
+  await viderCopieLocale()
+  session.user = null
+}
+
+export async function supprimerCompte() {
+  await api.del('/me')
+  await viderCopieLocale()
   session.user = null
 }

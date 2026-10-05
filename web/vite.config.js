@@ -1,26 +1,40 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+import { couleurs, site } from './theme.js'
+
+// Remplace les %CLE% de index.html par les valeurs de theme.js : une seule source pour les couleurs.
+const valeursHtml = {
+  THEME_COLOR: couleurs.safran,
+  SITE_NOM: site.nom,
+  SITE_DESCRIPTION: site.description,
+  SITE_URL: process.env.SITE_URL || site.url,
+}
+const injecterTheme = {
+  name: 'injecter-theme',
+  transformIndexHtml: (html) => html.replace(/%(THEME_COLOR|SITE_NOM|SITE_DESCRIPTION|SITE_URL)%/g, (_, cle) => valeursHtml[cle]),
+}
 
 export default defineConfig({
   plugins: [
     vue(),
+    injecterTheme,
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.ico', 'icon.svg', 'apple-touch-icon.png', 'capture-tableau-de-bord.webp'],
       manifest: {
-        name: 'Microdash',
-        short_name: 'Microdash',
-        description: 'Gestion de ta micro-entreprise : trésorerie, cotisations, échéances.',
+        name: site.nom,
+        short_name: site.nom,
+        description: site.description,
         lang: 'fr',
-        theme_color: '#1f5f8b',
-        background_color: '#f6f7f9',
+        theme_color: couleurs.safran,
+        background_color: couleurs.papier,
         display: 'standalone',
-        start_url: '/',
+        start_url: '/tableau-de-bord',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {

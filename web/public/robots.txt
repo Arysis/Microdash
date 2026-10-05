@@ -1,0 +1,7 @@
+# Les écrans de l'app sont privés : seules la vitrine et les pages légales sont à indexer.
+User-agent: *
+Disallow: /tableau-de-bord
+Disallow: /saisies
+Disallow: /profil
+Disallow: /compte
+Disallow: /api/

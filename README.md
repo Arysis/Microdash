@@ -23,7 +23,25 @@ Pour développer le front avec rechargement à chaud, garde la pile lancée puis
 2. Sur le serveur, copie `compose.yaml` et un `.env` avec `MICRODASH_VERSION=v0.1.0`, `COOKIE_SECURE=true` et un vrai mot de passe de base.
 3. Lance `docker compose pull && docker compose up -d`.
 
-Pour revenir en arrière, remets l'ancien tag dans `.env` et relance la commande. Place un reverse proxy HTTPS (par exemple Caddy) devant le port `WEB_PORT`. Si le dépôt est privé, connecte d'abord le serveur à ghcr.io avec `docker login ghcr.io`.
+Pour revenir en arrière, remets l'ancien tag dans `.env` et relance la commande. Si le dépôt est privé, connecte d'abord le serveur à ghcr.io avec `docker login ghcr.io`.
+
+### Domaine et HTTPS
+
+1. Achète le domaine, puis crée deux enregistrements DNS de type A, `mondomaine.fr` et `www.mondomaine.fr`, vers l'adresse IP du VPS.
+2. Dans les variables du dépôt GitHub (Settings > Secrets and variables > Actions > Variables), crée `SITE_URL` avec `https://www.mondomaine.fr`. Les images publiées par la CI s'en servent pour l'image de partage et l'adresse canonique. Pousse ensuite un nouveau tag.
+3. Installe Caddy sur le VPS. Il obtient et renouvelle seul les certificats HTTPS. Exemple de `Caddyfile`, qui redirige le domaine nu vers `www` :
+
+```
+mondomaine.fr {
+    redir https://www.mondomaine.fr{uri} permanent
+}
+
+www.mondomaine.fr {
+    reverse_proxy localhost:8080
+}
+```
+
+Remplace `8080` par ton `WEB_PORT`, et garde `COOKIE_SECURE=true` dans le `.env`.
 
 Sauvegarde de la base : `docker compose exec db pg_dump -U microdash microdash > sauvegarde.sql`.
 
@@ -34,6 +52,7 @@ Sauvegarde de la base : `docker compose exec db pg_dump -U microdash microdash >
 | `api/` | API Go : comptes, profil, transactions, calculs (`internal/calc`) |
 | `api/baremes/` | Taux, plafonds et règles par année (`2026.yaml`) |
 | `web/` | PWA Vue 3 + Vite, servie par Nginx qui relaie `/api` vers l'API |
+| `DESIGN.md` | Couleurs, polices, formes, icônes, mouvement et ton des textes : à suivre pour tout changement d'interface |
 | `compose.yaml` | Les trois services : `web`, `api`, `db` (PostgreSQL 16) |
 
 ## Mettre à jour les taux
