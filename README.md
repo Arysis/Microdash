@@ -60,6 +60,8 @@ L'API envoie les rappels chaque matin à 8 h (heure de Paris), et au démarrage 
 
 La page Trésorerie montre, mois par mois, l'argent qui entre et qui sort : recettes, dépenses (dont les dépenses récurrentes, saisies automatiquement à leur date) et cotisations URSSAF au mois de leur date limite. Elle prévoit les 6 mois suivants.
 
+Un paiement à l'URSSAF se saisit comme une dépense au poste « URSSAF (cotisations et impôt) », avec la déclaration qu'il règle. Il remplace alors l'estimation de cette période : le tableau de bord montre le montant payé sur le mois déclaré (au prorata du chiffre d'affaires en trimestriel), la trésorerie le compte le mois où il sort du compte, et l'agenda coche l'échéance. Le graphe a deux vues : le solde de chaque mois, ou le cumul de ce qu'il y a sur le compte en fin de mois (en bleu ce qui reste du mois d'avant, en vert ce que le mois a ajouté).
+
 Chaque compte peut y connecter son propre compte Stripe pour voir son revenu mensuel récurrent (MRR) et ses encaissements. Aucune clé ne va dans le `.env` : chacun colle sa clé dans l'app, elle est vérifiée auprès de Stripe, chiffrée (AES-256-GCM) avec `CLE_CHIFFREMENT` et liée à son compte. Elle n'est jamais renvoyée au navigateur ; seuls ses 4 derniers caractères sont affichés.
 
 Côté serveur, une seule chose à faire : mettre `CLE_CHIFFREMENT` dans le `.env` (`openssl rand -hex 32`), puis `docker compose up -d`. La garder précieusement : si elle change, les clés enregistrées ne sont plus lisibles et chacun doit recoller la sienne.

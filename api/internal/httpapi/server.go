@@ -449,8 +449,14 @@ func (s *Server) validerTransaction(w http.ResponseWriter, r *http.Request, in *
 	switch in.Type {
 	case calc.Depense:
 		in.Categorie = ""
+		if in.Poste != calc.PosteURSSAF {
+			in.Echeance = ""
+		} else if !codeURSSAF.MatchString(in.Echeance) {
+			erreur(w, http.StatusBadRequest, "choisis la déclaration URSSAF que ce paiement règle")
+			return false
+		}
 	case calc.Recette:
-		in.Poste = ""
+		in.Poste, in.Echeance = "", ""
 		p, err := s.Store.Profil(r.Context(), userID(r.Context()))
 		if errors.Is(err, store.ErrNotFound) {
 			erreur(w, http.StatusConflict, "renseigne ton profil avant de saisir une recette")
@@ -575,7 +581,7 @@ func (s *Server) tableauDeBord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uid := userID(r.Context())
-	txs, err := s.Store.Transactions(r.Context(), uid, time.Date(annee, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(annee, 12, 31, 0, 0, 0, 0, time.UTC))
+	txs, err := s.saisiesCalcul(r.Context(), uid, annee)
 	if err != nil {
 		erreurInterne(w, r, err)
 		return
@@ -622,12 +628,16 @@ func (s *Server) getAgenda(w http.ResponseWriter, r *http.Request) {
 		if le, ok := faites[e.Code]; ok {
 			j.Faite, j.FaiteLe = true, le.In(alertes.Paris).Format(formatDate)
 		}
+		// Un paiement saisi pour la déclaration vaut « c'est fait ».
+		j.Faite = j.Faite || e.Paye > 0
 		res = append(res, j)
 	}
 	ecrireJSON(w, http.StatusOK, map[string]any{
 		"annee": annee, "aujourdhui": alertes.Aujourdhui(s.now()).Format(formatDate), "echeances": res,
 	})
 }
+
+var codeURSSAF = regexp.MustCompile(`^urssaf-\d{4}-(0[1-9]|1[0-2]|t[1-4])$`)
 
 var codeEcheance = regexp.MustCompile(`^(urssaf-\d{4}-(0[1-9]|1[0-2]|t[1-4])|revenus-\d{4}|cfe-\d{4})$`)
 
@@ -723,6 +733,13 @@ func (s *Server) saisiesAnnee(w http.ResponseWriter, r *http.Request, annee int)
 	return txs, true
 }
 
+// saisiesCalcul renvoie les saisies d'une année et celles de l'année suivante : un paiement URSSAF
+// fait en janvier peut régler une période de l'année. Le calcul ne retient de l'année suivante
+// que ces paiements.
+func (s *Server) saisiesCalcul(ctx context.Context, uid int64, annee int) ([]store.Transaction, error) {
+	return s.Store.Transactions(ctx, uid, time.Date(annee, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(annee+1, 12, 31, 0, 0, 0, 0, time.UTC))
+}
+
 func telechargement(w http.ResponseWriter, typ, nom string) {
 	w.Header().Set("Content-Type", typ)
 	w.Header().Set("Content-Disposition", `attachment; filename="`+nom+`"`)
@@ -763,7 +780,12 @@ func (s *Server) exportPDF(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	res, err := calc.Calculer(annee, p.VersCalc(), store.VersCalc(txs), s.Baremes)
+	calcul, err := s.saisiesCalcul(r.Context(), u.ID, annee)
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	res, err := calc.Calculer(annee, p.VersCalc(), store.VersCalc(calcul), s.Baremes)
 	if err != nil {
 		erreur(w, http.StatusUnprocessableEntity, err.Error())
 		return

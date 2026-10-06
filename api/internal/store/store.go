@@ -186,13 +186,15 @@ type Transaction struct {
 	Tiers     string    `json:"tiers"`
 	// Recurrente : saisie créée par une dépense récurrente.
 	Recurrente bool `json:"recurrente"`
+	// Echeance : code de la déclaration URSSAF que paie la dépense (poste URSSAF), vide sinon.
+	Echeance string `json:"echeance"`
 }
 
-const colonnesTx = `id, type, date, centimes, categorie, poste, libelle, tiers, recurrente_id IS NOT NULL`
+const colonnesTx = `id, type, date, centimes, categorie, poste, libelle, tiers, recurrente_id IS NOT NULL, echeance`
 
 func scanTx(row pgx.Row) (*Transaction, error) {
 	t := &Transaction{}
-	err := row.Scan(&t.ID, &t.Type, &t.Date, &t.Centimes, &t.Categorie, &t.Poste, &t.Libelle, &t.Tiers, &t.Recurrente)
+	err := row.Scan(&t.ID, &t.Type, &t.Date, &t.Centimes, &t.Categorie, &t.Poste, &t.Libelle, &t.Tiers, &t.Recurrente, &t.Echeance)
 	return t, err
 }
 
@@ -215,16 +217,16 @@ func (s *Store) Transactions(ctx context.Context, userID int64, du, au time.Time
 }
 
 func (s *Store) CreateTransaction(ctx context.Context, userID int64, t Transaction) (*Transaction, error) {
-	row := s.db.QueryRow(ctx, `INSERT INTO transactions (user_id, type, date, centimes, categorie, poste, libelle, tiers)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING `+colonnesTx,
-		userID, t.Type, t.Date, t.Centimes, t.Categorie, t.Poste, t.Libelle, t.Tiers)
+	row := s.db.QueryRow(ctx, `INSERT INTO transactions (user_id, type, date, centimes, categorie, poste, libelle, tiers, echeance)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING `+colonnesTx,
+		userID, t.Type, t.Date, t.Centimes, t.Categorie, t.Poste, t.Libelle, t.Tiers, t.Echeance)
 	return scanTx(row)
 }
 
 func (s *Store) UpdateTransaction(ctx context.Context, userID int64, t Transaction) (*Transaction, error) {
-	row := s.db.QueryRow(ctx, `UPDATE transactions SET type = $3, date = $4, centimes = $5, categorie = $6, poste = $7, libelle = $8, tiers = $9
+	row := s.db.QueryRow(ctx, `UPDATE transactions SET type = $3, date = $4, centimes = $5, categorie = $6, poste = $7, libelle = $8, tiers = $9, echeance = $10
 		WHERE id = $1 AND user_id = $2 RETURNING `+colonnesTx,
-		t.ID, userID, t.Type, t.Date, t.Centimes, t.Categorie, t.Poste, t.Libelle, t.Tiers)
+		t.ID, userID, t.Type, t.Date, t.Centimes, t.Categorie, t.Poste, t.Libelle, t.Tiers, t.Echeance)
 	res, err := scanTx(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -358,6 +360,7 @@ func (p Profil) VersCalc() calc.Profil {
 	return calc.Profil{
 		Categorie: p.Categorie, CategorieSecondaire: p.CategorieSecondaire, NatureCFP: p.NatureCFP,
 		DebutActivite: p.DebutActivite, ACRE: p.ACRE, VersementLiberatoire: p.VersementLiberatoire,
+		Periodicite: p.Periodicite,
 	}
 }
 
@@ -365,7 +368,7 @@ func (p Profil) VersCalc() calc.Profil {
 func VersCalc(txs []Transaction) []calc.Transaction {
 	res := make([]calc.Transaction, 0, len(txs))
 	for _, t := range txs {
-		res = append(res, calc.Transaction{Type: t.Type, Date: t.Date, Centimes: t.Centimes, Categorie: t.Categorie})
+		res = append(res, calc.Transaction{Type: t.Type, Date: t.Date, Centimes: t.Centimes, Categorie: t.Categorie, Echeance: t.Echeance})
 	}
 	return res
 }

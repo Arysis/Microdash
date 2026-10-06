@@ -17,6 +17,7 @@ type Profil struct {
 	DebutActivite        time.Time
 	ACRE                 bool
 	VersementLiberatoire bool
+	Periodicite          string // mensuelle ou trimestrielle ; sert à retrouver la période d'un paiement URSSAF
 }
 
 const (
@@ -29,7 +30,13 @@ type Transaction struct {
 	Date      time.Time
 	Centimes  int64
 	Categorie string // recettes seulement ; vide = catégorie principale du profil
+	// Echeance : pour une dépense, code de la déclaration URSSAF qu'elle paie (ex. urssaf-2026-09).
+	// Ce paiement remplace l'estimation de la période et ne compte pas comme une dépense.
+	Echeance string
 }
+
+// PosteURSSAF est le poste de dépense des paiements à l'URSSAF (cotisations, CFP, impôt).
+const PosteURSSAF = "URSSAF (cotisations et impôt)"
 
 // Totaux sont exprimés en centimes.
 type Totaux struct {
@@ -37,8 +44,11 @@ type Totaux struct {
 	Cotisations int64 `json:"cotisations"`
 	CFP         int64 `json:"cfp"`
 	ImpotVL     int64 `json:"impot_vl"`
-	Depenses    int64 `json:"depenses"`
-	Net         int64 `json:"net"`
+	// URSSAFPaye : ce qui a vraiment été payé à l'URSSAF pour la période. Les mois payés n'ont
+	// plus de cotisations, CFP ni impôt estimés.
+	URSSAFPaye int64 `json:"urssaf_paye"`
+	Depenses   int64 `json:"depenses"`
+	Net        int64 `json:"net"`
 }
 
 type Periode struct {
@@ -99,7 +109,16 @@ func Valider(p Profil, b *bareme.Bareme) error {
 	return nil
 }
 
-type accu struct{ ca, cotis, cfp, vl, dep float64 }
+type accu struct{ ca, cotis, cfp, vl, dep, paye float64 }
+
+func (a *accu) ajouter(b accu) {
+	a.ca += b.ca
+	a.cotis += b.cotis
+	a.cfp += b.cfp
+	a.vl += b.vl
+	a.dep += b.dep
+	a.paye += b.paye
+}
 
 func (a *accu) totaux() Totaux {
 	t := Totaux{
@@ -107,9 +126,10 @@ func (a *accu) totaux() Totaux {
 		Cotisations: int64(math.Round(a.cotis)),
 		CFP:         int64(math.Round(a.cfp)),
 		ImpotVL:     int64(math.Round(a.vl)),
+		URSSAFPaye:  int64(math.Round(a.paye)),
 		Depenses:    int64(math.Round(a.dep)),
 	}
-	t.Net = t.CA - t.Cotisations - t.CFP - t.ImpotVL - t.Depenses
+	t.Net = t.CA - t.Cotisations - t.CFP - t.ImpotVL - t.URSSAFPaye - t.Depenses
 	return t
 }
 
@@ -120,45 +140,30 @@ func Calculer(annee int, p Profil, txs []Transaction, set *bareme.Set) (*Resulta
 		return nil, err
 	}
 	finACRE := FinACRE(p.DebutActivite)
-	reduction := 0.0
-	if p.ACRE {
-		reduction = b.ReductionACRE(p.DebutActivite)
+	est, err := estimer(p, txs, set)
+	if err != nil {
+		return nil, err
 	}
-	tauxCFP := b.CFP[p.NatureCFP]
+	payes := repartirPaiements(p, txs, est)
 
 	var mois [12]accu
 	caParCat := map[string]float64{}
-	for _, t := range txs {
-		if t.Date.Year() != annee {
-			continue
+	for i := range mois {
+		cle := cleMois(time.Date(annee, time.Month(i+1), 1, 0, 0, 0, 0, time.UTC))
+		if e := est[cle]; e != nil {
+			mois[i] = e.accu
 		}
-		m := &mois[t.Date.Month()-1]
-		montant := float64(t.Centimes)
-		switch t.Type {
-		case Depense:
-			m.dep += montant
-		case Recette:
+		if v, ok := payes[cle]; ok {
+			mois[i].cotis, mois[i].cfp, mois[i].vl, mois[i].paye = 0, 0, 0, v
+		}
+	}
+	for _, t := range txs {
+		if t.Type == Recette && t.Date.Year() == annee {
 			code := t.Categorie
 			if code == "" {
 				code = p.Categorie
 			}
-			cat, ok := b.Categories[code]
-			if !ok {
-				return nil, fmt.Errorf("catégorie inconnue : %q", code)
-			}
-			taux := cat.TauxCotisation(t.Date)
-			if p.ACRE && !t.Date.After(finACRE) && !t.Date.Before(p.DebutActivite) {
-				taux *= 1 - reduction
-			}
-			m.ca += montant
-			m.cotis += montant * taux
-			m.cfp += montant * tauxCFP
-			if p.VersementLiberatoire {
-				m.vl += montant * cat.VersementLiberatoire
-			}
-			caParCat[code] += montant
-		default:
-			return nil, fmt.Errorf("type de transaction inconnu : %q", t.Type)
+			caParCat[code] += float64(t.Centimes)
 		}
 	}
 
@@ -173,20 +178,12 @@ func Calculer(annee int, p Profil, txs []Transaction, set *bareme.Set) (*Resulta
 			Libelle: moisFR[i], Debut: debut.Format("2006-01-02"),
 			Fin: debut.AddDate(0, 1, -1).Format("2006-01-02"), Totaux: mois[i].totaux(),
 		})
-		total.ca += mois[i].ca
-		total.cotis += mois[i].cotis
-		total.cfp += mois[i].cfp
-		total.vl += mois[i].vl
-		total.dep += mois[i].dep
+		total.ajouter(mois[i])
 	}
 	for q := 0; q < 4; q++ {
 		var a accu
 		for i := q * 3; i < q*3+3; i++ {
-			a.ca += mois[i].ca
-			a.cotis += mois[i].cotis
-			a.cfp += mois[i].cfp
-			a.vl += mois[i].vl
-			a.dep += mois[i].dep
+			a.ajouter(mois[i])
 		}
 		debut := time.Date(annee, time.Month(q*3+1), 1, 0, 0, 0, 0, time.UTC)
 		r.Trimestres = append(r.Trimestres, Periode{
@@ -276,4 +273,137 @@ func plafonds(annee int, p Profil, b *bareme.Bareme, caParCat map[string]float64
 		res = append(res, nouveauPlafond("tva_"+g, "Franchise en base de TVA ("+g+")", parGroupe[g], cat.TVAFranchise.Base, cat.TVAFranchise.Majore))
 	}
 	return res
+}
+
+// moisEstime est l'estimation d'un mois civil.
+type moisEstime struct{ accu }
+
+// estimer calcule, pour chaque mois qui a des saisies, le chiffre d'affaires, les cotisations,
+// la CFP et l'impôt estimés, et les dépenses hors paiements URSSAF. Chaque saisie suit le barème
+// de son année.
+func estimer(p Profil, txs []Transaction, set *bareme.Set) (map[string]*moisEstime, error) {
+	finACRE := FinACRE(p.DebutActivite)
+	res := map[string]*moisEstime{}
+	for _, t := range txs {
+		b, _ := set.Pour(t.Date.Year())
+		k := cleMois(t.Date)
+		m := res[k]
+		if m == nil {
+			m = &moisEstime{}
+			res[k] = m
+		}
+		montant := float64(t.Centimes)
+		switch t.Type {
+		case Depense:
+			if t.Echeance == "" {
+				m.dep += montant
+			}
+		case Recette:
+			code := t.Categorie
+			if code == "" {
+				code = p.Categorie
+			}
+			cat, ok := b.Categories[code]
+			if !ok {
+				return nil, fmt.Errorf("catégorie inconnue : %q", code)
+			}
+			taux := cat.TauxCotisation(t.Date)
+			if p.ACRE && !t.Date.After(finACRE) && !t.Date.Before(p.DebutActivite) {
+				taux *= 1 - b.ReductionACRE(p.DebutActivite)
+			}
+			m.ca += montant
+			m.cotis += montant * taux
+			m.cfp += montant * b.CFP[p.NatureCFP]
+			if p.VersementLiberatoire {
+				m.vl += montant * cat.VersementLiberatoire
+			}
+		default:
+			return nil, fmt.Errorf("type de transaction inconnu : %q", t.Type)
+		}
+	}
+	return res, nil
+}
+
+// repartirPaiements rattache chaque paiement URSSAF aux mois de la période qu'il paie, au prorata
+// des charges estimées de chaque mois (à défaut du chiffre d'affaires, à défaut à parts égales).
+// Renvoie le montant payé par mois (AAAA-MM), pour tous les mois des périodes payées.
+func repartirPaiements(p Profil, txs []Transaction, est map[string]*moisEstime) map[string]float64 {
+	parCode := map[string]int64{}
+	var codes []string
+	for _, t := range txs {
+		if t.Type != Depense || t.Echeance == "" {
+			continue
+		}
+		if _, vu := parCode[t.Echeance]; !vu {
+			codes = append(codes, t.Echeance)
+		}
+		parCode[t.Echeance] += t.Centimes
+	}
+	res := map[string]float64{}
+	for _, code := range codes {
+		debut, fin, ok := PeriodeEcheance(code, p)
+		if !ok {
+			continue
+		}
+		var cles []string
+		var charges, ca []float64
+		var totalCharges, totalCA float64
+		for m := time.Date(debut.Year(), debut.Month(), 1, 0, 0, 0, 0, time.UTC); !m.After(fin); m = m.AddDate(0, 1, 0) {
+			k := cleMois(m)
+			var c, v float64
+			if e := est[k]; e != nil {
+				c, v = e.cotis+e.cfp+e.vl, e.ca
+			}
+			cles, charges, ca = append(cles, k), append(charges, c), append(ca, v)
+			totalCharges += c
+			totalCA += v
+		}
+		poids, total := charges, totalCharges
+		if total <= 0 {
+			poids, total = ca, totalCA
+		}
+		// Parts en centimes entiers ; le dernier mois reçoit le reste, pour que la somme tombe juste.
+		montant := parCode[code]
+		reste := montant
+		for i, k := range cles {
+			part := reste
+			if i < len(cles)-1 {
+				part = int64(math.Round(float64(montant) / float64(len(cles))))
+				if total > 0 {
+					part = int64(math.Round(float64(montant) * poids[i] / total))
+				}
+			}
+			res[k] += float64(part)
+			reste -= part
+		}
+	}
+	return res
+}
+
+// PeriodeEcheance renvoie la période (premier et dernier jour) que couvre une déclaration URSSAF.
+// La première déclaration, qui regroupe plusieurs périodes, est retrouvée dans le calendrier du
+// profil ; sinon le code suffit : urssaf-AAAA-MM pour un mois, urssaf-AAAA-tN pour un trimestre.
+func PeriodeEcheance(code string, p Profil) (debut, fin time.Time, ok bool) {
+	var a, n int
+	trimestre := false
+	if _, err := fmt.Sscanf(code, "urssaf-%d-t%d", &a, &n); err == nil && n >= 1 && n <= 4 {
+		trimestre = true
+	} else if _, err := fmt.Sscanf(code, "urssaf-%d-%d", &a, &n); err != nil || n < 1 || n > 12 {
+		return time.Time{}, time.Time{}, false
+	}
+	if !p.DebutActivite.IsZero() && (p.Periodicite == Mensuelle || p.Periodicite == Trimestrielle) {
+		for annee := a; annee <= a+1; annee++ {
+			for _, per := range declarationsURSSAF(annee, p.DebutActivite, p.Periodicite) {
+				if codeURSSAF(per, p.Periodicite) == code {
+					return per.debut, per.fin, true
+				}
+			}
+		}
+	}
+	if trimestre {
+		d := date(a, time.Month(n*3-2), 1)
+		return d, d.AddDate(0, 3, -1), true
+	}
+	d := date(a, time.Month(n), 1)
+	return d, d.AddDate(0, 1, -1), true
 }

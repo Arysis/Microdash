@@ -89,6 +89,13 @@ function texteAlerte(p) {
     ? { titre: 'Tu approches du seuil de franchise de TVA', texte: `${Math.floor(p.ratio * 100)} % du seuil de ${formatEuros(p.plafond)}. Garde un œil sur tes prochaines recettes.` }
     : { titre: 'Tu approches du plafond micro-entreprise', texte: `${Math.floor(p.ratio * 100)} % du plafond de ${formatEuros(p.plafond)}. Garde un œil sur tes prochaines recettes.` }
 }
+// Un mois payé à l'URSSAF montre le montant réel sur une ligne ; l'estimation ne reste que
+// pour les mois pas encore payés.
+const estimationVisible = computed(() => {
+  const t = totaux.value
+  return !t.urssaf_paye || t.cotisations + t.cfp + t.impot_vl > 0
+})
+const suffixeEstime = computed(() => (totaux.value?.urssaf_paye ? ', estimé (pas encore payé)' : ''))
 const impotLibelle = computed(() => (profil.value?.versement_liberatoire ? 'Impôt (versement libératoire)' : null))
 
 function changerVue(v) {
@@ -133,14 +140,20 @@ function changerVue(v) {
       </div>
       <div v-if="totaux.ca > 0" class="repartition" role="img" :aria-label="`Sur ${formatEuros(totaux.ca)} encaissés, il te reste ${formatEuros(totaux.net)}`">
         <div :style="{ flex: Math.max(totaux.net, 0), background: 'var(--sarcelle)' }"></div>
-        <div :style="{ flex: totaux.cotisations + totaux.cfp + totaux.impot_vl, background: 'var(--safran)' }"></div>
+        <div :style="{ flex: totaux.cotisations + totaux.cfp + totaux.impot_vl + totaux.urssaf_paye, background: 'var(--safran)' }"></div>
         <div :style="{ flex: totaux.depenses, background: 'var(--pierre)' }"></div>
       </div>
       <dl class="chiffres">
         <div><dt>Chiffre d'affaires encaissé</dt><dd><strong>{{ formatEuros(totaux.ca) }}</strong></dd></div>
-        <div><dt><span class="pastille" style="background: var(--safran)"></span>Cotisations sociales</dt><dd>− {{ formatEuros(totaux.cotisations) }}</dd></div>
-        <div><dt><span class="pastille" style="background: var(--safran)"></span>Formation professionnelle (CFP)</dt><dd>− {{ formatEuros(totaux.cfp) }}</dd></div>
-        <div v-if="impotLibelle"><dt><span class="pastille" style="background: var(--safran)"></span>{{ impotLibelle }}</dt><dd>− {{ formatEuros(totaux.impot_vl) }}</dd></div>
+        <div v-if="totaux.urssaf_paye > 0">
+          <dt><span class="pastille" style="background: var(--safran)"></span>{{ profil?.versement_liberatoire ? 'URSSAF et impôt payés' : 'URSSAF payé' }}</dt>
+          <dd>− {{ formatEuros(totaux.urssaf_paye) }}</dd>
+        </div>
+        <template v-if="estimationVisible">
+          <div><dt><span class="pastille" style="background: var(--safran)"></span>Cotisations sociales{{ suffixeEstime }}</dt><dd>− {{ formatEuros(totaux.cotisations) }}</dd></div>
+          <div><dt><span class="pastille" style="background: var(--safran)"></span>Formation professionnelle (CFP){{ suffixeEstime }}</dt><dd>− {{ formatEuros(totaux.cfp) }}</dd></div>
+          <div v-if="impotLibelle"><dt><span class="pastille" style="background: var(--safran)"></span>{{ impotLibelle }}{{ suffixeEstime }}</dt><dd>− {{ formatEuros(totaux.impot_vl) }}</dd></div>
+        </template>
         <div><dt><span class="pastille" style="background: var(--pierre)"></span>Dépenses</dt><dd>− {{ formatEuros(totaux.depenses) }}</dd></div>
       </dl>
       <p v-if="vue === 'annee' && !profil?.versement_liberatoire" class="aide">

@@ -114,10 +114,15 @@ func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error
 		if mt == nil || mt.Prevision {
 			continue
 		}
-		if t.Type == Recette {
+		switch {
+		case t.Type == Recette:
 			mt.Encaisse += t.Centimes
 			noter(t.Date, t.Centimes)
-		} else {
+		case t.Echeance != "":
+			// Paiement URSSAF réel : il remplace l'estimation de sa déclaration.
+			mt.Cotisations += t.Centimes
+			noter(t.Date, -t.Centimes)
+		default:
 			mt.Depenses += t.Centimes
 			noter(t.Date, -t.Centimes)
 		}
@@ -235,6 +240,14 @@ func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error
 	if solde != nil {
 		v := *solde
 		res.SoldePrevu = &v
+		// Avant le mois du solde, on remonte le temps : la fin d'un mois est la fin du suivant
+		// moins le flux du suivant. La vue cumulée a ainsi un solde pour chaque mois.
+		for i := len(mois) - 2; i >= 0; i-- {
+			if mois[i].SoldeFin == nil && mois[i+1].SoldeFin != nil {
+				v := *mois[i+1].SoldeFin - mois[i+1].Flux
+				mois[i].SoldeFin = &v
+			}
+		}
 	}
 	res.Mois = make([]MoisTresorerie, len(mois))
 	for i, mt := range mois {

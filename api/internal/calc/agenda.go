@@ -22,7 +22,8 @@ type Echeance struct {
 	PeriodeDebut string `json:"periode_debut,omitempty"`
 	PeriodeFin   string `json:"periode_fin,omitempty"`
 	CA           int64  `json:"ca"`
-	APayer       int64  `json:"a_payer"` // cotisations, CFP et versement libératoire estimés
+	APayer       int64  `json:"a_payer"` // cotisations, CFP et versement libératoire estimés, hors mois déjà payés
+	Paye         int64  `json:"paye"`    // paiements URSSAF saisis pour cette période
 	Note         string `json:"note,omitempty"`
 	BaremeExact  bool   `json:"bareme_exact"` // faux si un montant utilise le barème d'une autre année
 }
@@ -139,7 +140,7 @@ func declarationsURSSAF(annee int, debut time.Time, periodicite string) []period
 
 // montants additionne le chiffre d'affaires et ce qu'il y a à payer sur une période,
 // à partir des totaux mensuels de chaque année concernée.
-func montants(p periode, parAnnee map[int]*Resultat) (ca, aPayer int64, exact bool) {
+func montants(p periode, parAnnee map[int]*Resultat) (ca, aPayer, paye int64, exact bool) {
 	exact = true
 	for m := date(p.debut.Year(), p.debut.Month(), 1); !m.After(p.fin); m = m.AddDate(0, 1, 0) {
 		r := parAnnee[m.Year()]
@@ -150,8 +151,9 @@ func montants(p periode, parAnnee map[int]*Resultat) (ca, aPayer int64, exact bo
 		t := r.Mois[m.Month()-1].Totaux
 		ca += t.CA
 		aPayer += t.Cotisations + t.CFP + t.ImpotVL
+		paye += t.URSSAFPaye
 	}
-	return ca, aPayer, exact
+	return ca, aPayer, paye, exact
 }
 
 // Agenda liste les échéances dont la date limite tombe dans l'année, plus la déclaration URSSAF
@@ -166,6 +168,9 @@ func Agenda(annee int, p Profil, periodicite string, txs []Transaction, set *bar
 		return nil, fmt.Errorf("date de début d'activité manquante")
 	}
 	parAnnee := map[int]*Resultat{}
+	if p.Periodicite == "" {
+		p.Periodicite = periodicite
+	}
 	for a := annee - 1; a <= annee; a++ { // une période déclarée dans l'année commence au plus tôt l'année d'avant
 		if a < debut.Year() {
 			continue
@@ -181,13 +186,13 @@ func Agenda(annee int, p Profil, periodicite string, txs []Transaction, set *bar
 	for _, per := range declarationsURSSAF(annee, debut, periodicite) {
 		legale := limite(per)
 		reportee := JourOuvre(legale)
-		ca, aPayer, exact := montants(per, parAnnee)
+		ca, aPayer, paye, exact := montants(per, parAnnee)
 		e := Echeance{
 			Code: codeURSSAF(per, periodicite), Type: "urssaf",
 			Libelle:      libelleURSSAF(per, periodicite, per.debut.Equal(debut)),
 			Date:         reportee.Format("2006-01-02"),
 			PeriodeDebut: per.debut.Format("2006-01-02"), PeriodeFin: per.fin.Format("2006-01-02"),
-			CA: ca, APayer: aPayer, BaremeExact: exact,
+			CA: ca, APayer: aPayer, Paye: paye, BaremeExact: exact,
 		}
 		if !reportee.Equal(legale) {
 			e.DateLegale = legale.Format("2006-01-02")
