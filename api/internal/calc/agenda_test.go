@@ -70,10 +70,14 @@ func TestAgendaTrimestriel(t *testing.T) {
 		{"urssaf-2026-t2", "2026-07-31", "", "2026-04-01", "2026-06-30"},
 		{"urssaf-2026-t3", "2026-11-02", "2026-10-31", "2026-07-01", "2026-09-30"},
 		{"cfe-2026", "2026-12-15", "", "", ""},
+		{"urssaf-2026-t4", "2027-02-01", "2027-01-31", "2026-10-01", "2026-12-31"},
 	})
 	// T4 2025 : 1 000 € de recettes, 21,2 % + 0,3 % de CFP
 	if es[0].CA != 100000 || es[0].APayer != 21500 || es[0].Note != "" || es[0].BaremeExact {
 		t.Errorf("T4 2025 = %+v", es[0])
+	}
+	if es[6].CA != 180000 {
+		t.Errorf("T4 2026 dans l'agenda 2026 = %+v", es[6])
 	}
 	if es[1].CA != 0 || es[1].Note == "" {
 		t.Errorf("une période sans recette doit porter la note des 0 € : %+v", es[1])
@@ -90,11 +94,11 @@ func TestAgendaTrimestriel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if es[0].Code != "urssaf-2026-t4" || es[0].Date != "2027-02-01" || es[0].DateLegale != "2027-01-31" || es[0].CA != 180000 {
+	if es[0].Code != "urssaf-2026-t4" || es[0].Date != "2027-02-01" || es[0].DateLegale != "2027-01-31" || es[0].CA != 180000 || es[0].APayer != 38700 {
 		t.Errorf("T4 2026 = %+v", es[0])
 	}
 	// Pas encore de barème 2027 : montants 2027 et CFE marqués comme estimés, CFE au 15 décembre quand même.
-	if !es[0].BaremeExact || es[1].BaremeExact || es[len(es)-1].BaremeExact || es[len(es)-1].Code != "cfe-2027" || es[len(es)-1].Date != "2027-12-15" {
+	if !es[0].BaremeExact || es[1].BaremeExact || es[5].BaremeExact || es[5].Code != "cfe-2027" || es[5].Date != "2027-12-15" {
 		t.Errorf("agenda 2027 = %+v", es)
 	}
 }
@@ -109,6 +113,7 @@ func TestPremiereDeclarationTrimestrielle(t *testing.T) {
 	verifier(t, es, []attendue{
 		{"urssaf-2026-t2", "2026-07-31", "", "2026-02-01", "2026-06-30"},
 		{"urssaf-2026-t3", "2026-11-02", "2026-10-31", "2026-07-01", "2026-09-30"},
+		{"urssaf-2026-t4", "2027-02-01", "2027-01-31", "2026-10-01", "2026-12-31"},
 	})
 	if es[0].Libelle != "Première déclaration URSSAF" || es[1].Libelle == "Première déclaration URSSAF" {
 		t.Errorf("libellés = %q, %q", es[0].Libelle, es[1].Libelle)
@@ -131,6 +136,7 @@ func TestPremiereDeclarationMensuelle(t *testing.T) {
 		{"urssaf-2026-09", "2026-11-02", "2026-10-31", "2026-09-01", "2026-09-30"},
 		{"urssaf-2026-10", "2026-11-30", "", "2026-10-01", "2026-10-31"},
 		{"urssaf-2026-11", "2026-12-31", "", "2026-11-01", "2026-11-30"},
+		{"urssaf-2026-12", "2027-02-01", "2027-01-31", "2026-12-01", "2026-12-31"},
 	})
 	if es[1].Libelle != "Déclaration URSSAF de juin 2026" {
 		t.Errorf("libellé = %q", es[1].Libelle)

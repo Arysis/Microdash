@@ -108,7 +108,8 @@ func codeURSSAF(p periode, periodicite string) string {
 	return fmt.Sprintf("urssaf-%d-t%d", p.fin.Year(), (int(p.fin.Month())-1)/3+1)
 }
 
-// declarationsURSSAF liste les déclarations dont la date limite légale tombe dans l'année.
+// declarationsURSSAF liste les déclarations dont la date limite légale tombe dans l'année,
+// puis celles des périodes de l'année qui se déclarent l'année suivante (4e trimestre, décembre).
 // La première déclaration regroupe la période du début d'activité et les suivantes, pour
 // respecter le délai de 90 jours : jusqu'à la fin du 3e mois qui suit le mois de début
 // (mensuel) ou jusqu'à la fin du trimestre qui suit (trimestriel).
@@ -126,10 +127,10 @@ func declarationsURSSAF(annee int, debut time.Time, periodicite string) []period
 	courante := periode{debut, fin.fin}
 	for {
 		l := limite(courante)
-		if l.Year() > annee {
+		if l.Year() > annee && courante.fin.Year() > annee {
 			return res
 		}
-		if l.Year() == annee {
+		if l.Year() == annee || courante.fin.Year() == annee {
 			res = append(res, courante)
 		}
 		courante = suivante(periode{courante.fin, courante.fin}, periodicite)
@@ -153,7 +154,8 @@ func montants(p periode, parAnnee map[int]*Resultat) (ca, aPayer int64, exact bo
 	return ca, aPayer, exact
 }
 
-// Agenda liste les échéances dont la date limite tombe dans l'année, dans l'ordre des dates.
+// Agenda liste les échéances dont la date limite tombe dans l'année, plus la déclaration URSSAF
+// de la fin d'année qui tombe en janvier suivant, dans l'ordre des dates.
 // Une échéance sans date connue (déclaration de revenus) est placée à sa période habituelle.
 func Agenda(annee int, p Profil, periodicite string, txs []Transaction, set *bareme.Set) ([]Echeance, error) {
 	if periodicite != Mensuelle && periodicite != Trimestrielle {
@@ -164,7 +166,7 @@ func Agenda(annee int, p Profil, periodicite string, txs []Transaction, set *bar
 		return nil, fmt.Errorf("date de début d'activité manquante")
 	}
 	parAnnee := map[int]*Resultat{}
-	for a := annee - 2; a <= annee; a++ {
+	for a := annee - 1; a <= annee; a++ { // une période déclarée dans l'année commence au plus tôt l'année d'avant
 		if a < debut.Year() {
 			continue
 		}
