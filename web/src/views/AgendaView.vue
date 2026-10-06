@@ -46,6 +46,7 @@ const majuscule = (s) => s.charAt(0).toUpperCase() + s.slice(1)
 function detail(e) {
   if (e.type === 'cfe') return 'À confirmer pour ton cas.'
   if (e.type === 'revenus') return e.date ? 'Vérifie la date de ton département.' : 'Date selon ton département.'
+  if (e.paye) return `Payé ${formatEuros(e.paye)}, d'après tes saisies.`
   const n = restants(e)
   if (n < 0 || e.faite) return raisonReport(e)
   const parties = []
@@ -107,7 +108,7 @@ async function cocher(e, faite) {
         {{ suivante.type === 'urssaf' ? "Déclarer sur l'URSSAF" : 'Aller sur impots.gouv.fr' }}
       </a>
       <label class="case fait">
-        <input type="checkbox" :checked="suivante.faite" :disabled="enCours === suivante.code" @change="cocher(suivante, $event.target.checked)" />
+        <input type="checkbox" :checked="suivante.faite" :disabled="enCours === suivante.code || suivante.paye > 0" @change="cocher(suivante, $event.target.checked)" />
         C'est fait
       </label>
     </div>
@@ -125,7 +126,7 @@ async function cocher(e, faite) {
           <small v-if="detail(e)">{{ detail(e) }}</small>
         </span>
         <label class="coche">
-          <input type="checkbox" :checked="e.faite" :disabled="enCours === e.code" :aria-label="`${libelleCourt(e)} : c'est fait`" @change="cocher(e, $event.target.checked)" />
+          <input type="checkbox" :checked="e.faite" :disabled="enCours === e.code || e.paye > 0" :aria-label="`${libelleCourt(e)} : c'est fait`" @change="cocher(e, $event.target.checked)" />
         </label>
       </li>
     </ul>

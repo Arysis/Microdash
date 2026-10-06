@@ -26,6 +26,8 @@ Toutes les couleurs sont des variables CSS définies dans `web/src/style.css` (`
 | Surfaces (cartes, champs) | Blanc | `#FFFFFF` | `--blanc` |
 | Erreur et seuil dépassé, uniquement | Brique | `#B91C1C` | `--brique` |
 | Fond des écrans principaux | Lin chaud | `#F3F0EB` | `--fond-relief` |
+| Graphes uniquement : report du mois d'avant (trésorerie cumulée) | Bleu | `#4C7BD9` | `--bleu` |
+| Graphes uniquement, hachures des prévisions | Bleu clair | `#EAF0FB` | `--bleu-clair` |
 
 Pas de dégradé. Pas de mode sombre pour l'instant : une seule identité claire.
 

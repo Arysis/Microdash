@@ -50,6 +50,8 @@ func (s *Server) validerRecurrente(w http.ResponseWriter, in *recurrenteJSON) bo
 		erreur(w, http.StatusBadRequest, "donne un nom à la dépense (ex. : Figma)")
 	case in.Poste == "":
 		erreur(w, http.StatusBadRequest, "choisis un poste de dépense")
+	case in.Poste == calc.PosteURSSAF:
+		erreur(w, http.StatusBadRequest, "un paiement URSSAF change chaque mois : saisis-le dans Saisies, avec sa déclaration")
 	case in.Centimes <= 0:
 		erreur(w, http.StatusBadRequest, "le montant doit être positif")
 	case in.Frequence != calc.Mensuelle && in.Frequence != calc.Annuelle:

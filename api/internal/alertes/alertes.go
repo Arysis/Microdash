@@ -44,10 +44,11 @@ type Source interface {
 
 // Agenda calcule l'agenda d'une personne pour une année, à partir de ses saisies.
 func Agenda(ctx context.Context, src Source, set *bareme.Set, userID int64, p store.Profil, annee int) ([]calc.Echeance, error) {
-	txs, err := src.Transactions(ctx, userID, time.Date(annee-1, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(annee, 12, 31, 0, 0, 0, 0, time.UTC))
+	txs, err := src.Transactions(ctx, userID, time.Date(annee-1, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(annee+1, 12, 31, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		return nil, err
 	}
+	// Les saisies de l'année suivante ne servent qu'aux paiements URSSAF qu'elles contiennent.
 	return calc.Agenda(annee, p.VersCalc(), p.Periodicite, store.VersCalc(txs), set)
 }
 
@@ -116,14 +117,14 @@ const (
 )
 
 // Rappels choisit les rappels d'échéances du jour : un premier entre 7 et 2 jours avant,
-// un second la veille ou le jour même. Les échéances cochées ou sans date n'en ont pas.
+// un second la veille ou le jour même. Les échéances cochées, déjà payées ou sans date n'en ont pas.
 func Rappels(d store.Destinataire, agenda []calc.Echeance, faites map[string]time.Time, aujourdhui time.Time) []Alerte {
 	var res []Alerte
 	for _, e := range agenda {
 		if e.Date == "" {
 			continue
 		}
-		if _, ok := faites[e.Code]; ok {
+		if _, ok := faites[e.Code]; ok || e.Paye > 0 {
 			continue
 		}
 		switch e.Type {

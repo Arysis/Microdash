@@ -274,10 +274,20 @@ func PDF(w io.Writer, r Recapitulatif) error {
 	t := res.Total
 	d.titreSection(fmt.Sprintf("Totaux %d", res.Annee))
 	d.paire("Chiffre d'affaires encaissé", euros(t.CA), false)
-	d.paire("Cotisations sociales", "− "+euros(t.Cotisations), false)
-	d.paire("Formation professionnelle (CFP)", "− "+euros(t.CFP), false)
-	if p.VersementLiberatoire {
-		d.paire("Impôt (versement libératoire)", "− "+euros(t.ImpotVL), false)
+	// Les mois payés montrent le paiement réel ; les autres, l'estimation.
+	if t.URSSAFPaye > 0 {
+		d.paire(libellePaye(p), "− "+euros(t.URSSAFPaye), false)
+	}
+	if t.URSSAFPaye == 0 || t.Cotisations+t.CFP+t.ImpotVL > 0 {
+		suffixe := ""
+		if t.URSSAFPaye > 0 {
+			suffixe = ", mois pas encore payés"
+		}
+		d.paire("Cotisations sociales"+suffixe, "− "+euros(t.Cotisations), false)
+		d.paire("Formation professionnelle (CFP)"+suffixe, "− "+euros(t.CFP), false)
+		if p.VersementLiberatoire {
+			d.paire("Impôt (versement libératoire)"+suffixe, "− "+euros(t.ImpotVL), false)
+		}
 	}
 	d.paire("Dépenses", "− "+euros(t.Depenses), false)
 	d.paire("Revenu net estimé", euros(t.Net), true)
@@ -293,16 +303,18 @@ func PDF(w io.Writer, r Recapitulatif) error {
 	}
 	d.titreSection(titre)
 	largeurs := []float64{0.24, 0.19, 0.19, 0.19, 0.19}
-	d.ligne([]string{"Période", "Chiffre d'affaires", "Cotisations et CFP", "Dépenses", "Net"}, largeurs, "LRRRR", true, pierre)
+	d.ligne([]string{"Période", "Chiffre d'affaires", "URSSAF", "Dépenses", "Net"}, largeurs, "LRRRR", true, pierre)
 	for i, pe := range periodes {
-		d.ligne([]string{nom(i, pe), euros(pe.CA), euros(pe.Cotisations + pe.CFP + pe.ImpotVL), euros(pe.Depenses), euros(pe.Net)}, largeurs, "LRRRR", false, encre)
+		d.ligne([]string{nom(i, pe), euros(pe.CA), euros(pe.Cotisations + pe.CFP + pe.ImpotVL + pe.URSSAFPaye), euros(pe.Depenses), euros(pe.Net)}, largeurs, "LRRRR", false, encre)
 	}
-	d.ligne([]string{"Année", euros(t.CA), euros(t.Cotisations + t.CFP + t.ImpotVL), euros(t.Depenses), euros(t.Net)}, largeurs, "LRRRR", true, encre)
+	d.ligne([]string{"Année", euros(t.CA), euros(t.Cotisations + t.CFP + t.ImpotVL + t.URSSAFPaye), euros(t.Depenses), euros(t.Net)}, largeurs, "LRRRR", true, encre)
+	d.police(false, 8.5)
+	d.couleurTexte(pierre)
+	note := "Colonne URSSAF : cotisations et CFP"
 	if p.VersementLiberatoire {
-		d.police(false, 8.5)
-		d.couleurTexte(pierre)
-		f.CellFormat(0, 6, "La colonne Cotisations et CFP inclut l'impôt du versement libératoire.", "", 1, "L", false, 0, "")
+		note += ", impôt du versement libératoire compris"
 	}
+	f.CellFormat(0, 6, note+". Montant payé pour les périodes réglées, estimation sinon.", "", 1, "L", false, 0, "")
 
 	// Plafonds
 	d.titreSection(fmt.Sprintf("Plafonds %d", res.Annee))
@@ -348,4 +360,11 @@ func PDF(w io.Writer, r Recapitulatif) error {
 		}
 	}
 	return f.Output(w)
+}
+
+func libellePaye(p store.Profil) string {
+	if p.VersementLiberatoire {
+		return "URSSAF payé (cotisations, CFP et impôt)"
+	}
+	return "URSSAF payé (cotisations et CFP)"
 }

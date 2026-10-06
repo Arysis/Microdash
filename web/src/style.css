@@ -11,6 +11,9 @@
   --papier: #faf8f5;
   --blanc: #ffffff;
   --brique: #b91c1c;
+  /* Graphes uniquement : ce qui reste du mois d'avant, dans la vue cumulée de la trésorerie. */
+  --bleu: #4c7bd9;
+  --bleu-clair: #eaf0fb;
   /* Encre transparente, pour le voile et l'ombre de la fenêtre de confirmation. */
   --voile: rgba(28, 25, 23, 0.4);
   --ombre: 0 8px 32px rgba(28, 25, 23, 0.18);

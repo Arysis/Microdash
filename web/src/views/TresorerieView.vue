@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { Pencil, RefreshCw, Trash2 } from 'lucide-vue-next'
 import { api } from '../api.js'
 import { demanderConfirmation } from '../confirmation.js'
-import { aujourdhui, formatDate, formatEuros, postesDepense, versCentimes } from '../format.js'
+import { aujourdhui, formatDate, formatEuros, posteURSSAF, postesDepense, versCentimes } from '../format.js'
 import GrapheTresorerie from '../components/GrapheTresorerie.vue'
 
 const donnees = ref(null)
@@ -23,6 +23,24 @@ async function charger() {
 onMounted(charger)
 
 const tr = computed(() => donnees.value?.tresorerie)
+
+// Vue du graphe, gardée sur cet appareil.
+const lireVue = () => {
+  try {
+    return localStorage.getItem('microdash.tresorerie.vue') === 'cumul' ? 'cumul' : 'mois'
+  } catch {
+    return 'mois'
+  }
+}
+const vueGraphe = ref(lireVue())
+function choisirVue(v) {
+  vueGraphe.value = v
+  try {
+    localStorage.setItem('microdash.tresorerie.vue', v)
+  } catch {
+    // stockage indisponible : la vue reste choisie jusqu'au rechargement
+  }
+}
 const mois = computed(() => tr.value?.mois || [])
 const prevus = computed(() => mois.value.filter((m) => m.prevision))
 const dernierPrevu = computed(() => prevus.value[prevus.value.length - 1])
@@ -140,6 +158,8 @@ async function deconnecterStripe() {
 }
 
 // --- Dépenses récurrentes ---
+// Un paiement URSSAF varie et se rattache à une déclaration : il se saisit à la main.
+const postesRecurrents = postesDepense.filter((p) => p !== posteURSSAF)
 const recurrentes = computed(() => donnees.value?.recurrentes || [])
 const vide = () => ({ libelle: '', montant: '', frequence: 'mensuelle', poste: 'Logiciels et abonnements', debut: aujourdhui(), fin: '' })
 const rec = reactive(vide())
@@ -259,7 +279,11 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
         </div>
       </form>
 
-      <GrapheTresorerie :mois="mois" />
+      <div class="bascule" role="group" aria-label="Vue du graphe">
+        <button type="button" :class="{ actif: vueGraphe === 'mois' }" :aria-pressed="vueGraphe === 'mois'" @click="choisirVue('mois')">Par mois</button>
+        <button type="button" :class="{ actif: vueGraphe === 'cumul' }" :aria-pressed="vueGraphe === 'cumul'" @click="choisirVue('cumul')">Cumulée</button>
+      </div>
+      <GrapheTresorerie :mois="mois" :vue="vueGraphe" />
 
       <div v-if="stripe?.connecte && stripe.mrr" class="source">
         <span id="titre-source">Recettes prévues</span>
@@ -389,7 +413,7 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
       <label>
         Poste
         <select v-model="rec.poste">
-          <option v-for="p in postesDepense" :key="p">{{ p }}</option>
+          <option v-for="p in postesRecurrents" :key="p">{{ p }}</option>
         </select>
       </label>
       <div class="ligne">

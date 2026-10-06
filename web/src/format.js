@@ -23,6 +23,9 @@ export const postesDepense = [
   'Formation',
   'Frais bancaires',
   'Assurance',
+  'URSSAF (cotisations et impôt)',
   'Marketing',
   'Autre',
 ]
+
+export const posteURSSAF = 'URSSAF (cotisations et impôt)'

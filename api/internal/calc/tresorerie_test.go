@@ -123,3 +123,28 @@ func TestTresorerieMoyenneActiviteRecente(t *testing.T) {
 		t.Errorf("sans mois complet : %d mois, %d", tr.MoisMoyenne, tr.RecettesPrevues)
 	}
 }
+
+func TestTresorerieSoldeAvant(t *testing.T) {
+	set := charger(t)
+	solde := int64(100000)
+	e := EntreeTresorerie{
+		Aujourdhui: jour("2026-10-06"), MoisPasses: 2, MoisFuturs: 0, Solde: &solde, SoldeAu: jour("2026-10-06"),
+		Profil: Profil{Categorie: "services_bic", NatureCFP: "artisan", DebutActivite: jour("2026-08-01")},
+		Saisies: []Transaction{
+			{Type: Recette, Date: jour("2026-08-10"), Centimes: 30000},
+			{Type: Recette, Date: jour("2026-09-10"), Centimes: 50000},
+			{Type: Depense, Date: jour("2026-10-02"), Centimes: 10000},
+		},
+	}
+	tr, err := CalculerTresorerie(e, set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Fin octobre 1 000 € ; fin septembre = 1 000 + 100 de dépense d'octobre ; fin août = 1 100 − 500.
+	attendus := []int64{60000, 110000, 100000}
+	for i, a := range attendus {
+		if m := tr.Mois[i]; m.SoldeFin == nil || *m.SoldeFin != a {
+			t.Errorf("%s : %v, attendu %d", m.Mois, m.SoldeFin, a)
+		}
+	}
+}
