@@ -12,6 +12,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/arysis/microdash/api/internal/calc"
 )
 
 //go:embed migrations/*.sql
@@ -237,4 +239,131 @@ func (s *Store) DeleteTransaction(ctx context.Context, userID, id int64) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// --- Agenda ---
+
+// EcheancesFaites renvoie les codes d'échéances cochés, avec leur date.
+func (s *Store) EcheancesFaites(ctx context.Context, userID int64) (map[string]time.Time, error) {
+	rows, err := s.db.Query(ctx, `SELECT code, faite_le FROM echeances_faites WHERE user_id = $1`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	res := map[string]time.Time{}
+	for rows.Next() {
+		var code string
+		var le time.Time
+		if err := rows.Scan(&code, &le); err != nil {
+			return nil, err
+		}
+		res[code] = le
+	}
+	return res, rows.Err()
+}
+
+func (s *Store) MarquerEcheance(ctx context.Context, userID int64, code string, faite bool) error {
+	var err error
+	if faite {
+		_, err = s.db.Exec(ctx, `INSERT INTO echeances_faites (user_id, code) VALUES ($1, $2) ON CONFLICT DO NOTHING`, userID, code)
+	} else {
+		_, err = s.db.Exec(ctx, `DELETE FROM echeances_faites WHERE user_id = $1 AND code = $2`, userID, code)
+	}
+	return err
+}
+
+// --- Alertes ---
+
+type Preferences struct {
+	Echeances bool `json:"echeances"`
+	Plafond   bool `json:"plafond"`
+	TVA       bool `json:"tva"`
+	CFE       bool `json:"cfe"`
+}
+
+var PreferencesParDefaut = Preferences{Echeances: true, Plafond: true, TVA: true, CFE: true}
+
+func (s *Store) Preferences(ctx context.Context, userID int64) (Preferences, error) {
+	p := PreferencesParDefaut
+	err := s.db.QueryRow(ctx, `SELECT echeances, plafond, tva, cfe FROM preferences_alertes WHERE user_id = $1`, userID).
+		Scan(&p.Echeances, &p.Plafond, &p.TVA, &p.CFE)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return PreferencesParDefaut, nil
+	}
+	return p, err
+}
+
+func (s *Store) SavePreferences(ctx context.Context, userID int64, p Preferences) error {
+	_, err := s.db.Exec(ctx, `INSERT INTO preferences_alertes (user_id, echeances, plafond, tva, cfe) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (user_id) DO UPDATE SET echeances = $2, plafond = $3, tva = $4, cfe = $5, updated_at = now()`,
+		userID, p.Echeances, p.Plafond, p.TVA, p.CFE)
+	return err
+}
+
+// ReserverAlerte enregistre un envoi avant qu'il parte ; faux si la même alerte est déjà partie.
+func (s *Store) ReserverAlerte(ctx context.Context, userID int64, cle string) (bool, error) {
+	tag, err := s.db.Exec(ctx, `INSERT INTO alertes_envoyees (user_id, cle) VALUES ($1, $2) ON CONFLICT DO NOTHING`, userID, cle)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// AnnulerAlerte retire la réservation d'un envoi qui a échoué, pour réessayer au prochain passage.
+func (s *Store) AnnulerAlerte(ctx context.Context, userID int64, cle string) error {
+	_, err := s.db.Exec(ctx, `DELETE FROM alertes_envoyees WHERE user_id = $1 AND cle = $2`, userID, cle)
+	return err
+}
+
+// Destinataire est un compte avec un profil, tel que le lit la tâche des rappels.
+type Destinataire struct {
+	ID          int64
+	Email       string
+	Profil      Profil
+	Preferences Preferences
+}
+
+// Destinataires liste les comptes qui ont un profil et au moins un rappel activé.
+func (s *Store) Destinataires(ctx context.Context) ([]Destinataire, error) {
+	rows, err := s.db.Query(ctx, `SELECT u.id, u.email,
+			p.categorie, p.categorie_secondaire, p.nature_cfp, p.debut_activite, p.acre, p.versement_liberatoire, p.periodicite,
+			COALESCE(a.echeances, true), COALESCE(a.plafond, true), COALESCE(a.tva, true), COALESCE(a.cfe, true)
+		FROM users u
+		JOIN LATERAL (SELECT * FROM profils WHERE user_id = u.id ORDER BY id DESC LIMIT 1) p ON true
+		LEFT JOIN preferences_alertes a ON a.user_id = u.id
+		ORDER BY u.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []Destinataire
+	for rows.Next() {
+		var d Destinataire
+		p, a := &d.Profil, &d.Preferences
+		if err := rows.Scan(&d.ID, &d.Email, &p.Categorie, &p.CategorieSecondaire, &p.NatureCFP, &p.DebutActivite, &p.ACRE, &p.VersementLiberatoire, &p.Periodicite,
+			&a.Echeances, &a.Plafond, &a.TVA, &a.CFE); err != nil {
+			return nil, err
+		}
+		if a.Echeances || a.Plafond || a.TVA || a.CFE {
+			res = append(res, d)
+		}
+	}
+	return res, rows.Err()
+}
+
+// VersCalc donne le profil sous la forme qu'attend le calcul.
+func (p Profil) VersCalc() calc.Profil {
+	return calc.Profil{
+		Categorie: p.Categorie, CategorieSecondaire: p.CategorieSecondaire, NatureCFP: p.NatureCFP,
+		DebutActivite: p.DebutActivite, ACRE: p.ACRE, VersementLiberatoire: p.VersementLiberatoire,
+	}
+}
+
+// VersCalc donne les transactions sous la forme qu'attend le calcul.
+func VersCalc(txs []Transaction) []calc.Transaction {
+	res := make([]calc.Transaction, 0, len(txs))
+	for _, t := range txs {
+		res = append(res, calc.Transaction{Type: t.Type, Date: t.Date, Centimes: t.Centimes, Categorie: t.Categorie})
+	}
+	return res
 }

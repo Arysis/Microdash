@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/mail"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/arysis/microdash/api/internal/alertes"
 	"github.com/arysis/microdash/api/internal/bareme"
 	"github.com/arysis/microdash/api/internal/calc"
 	"github.com/arysis/microdash/api/internal/store"
@@ -33,11 +35,12 @@ type Server struct {
 	Store        *store.Store
 	Baremes      *bareme.Set
 	CookieSecure bool
+	Signature    alertes.Signature // liens de désinscription des e-mails
 	now          func() time.Time
 }
 
-func New(st *store.Store, b *bareme.Set, cookieSecure bool) *Server {
-	return &Server{Store: st, Baremes: b, CookieSecure: cookieSecure, now: time.Now}
+func New(st *store.Store, b *bareme.Set, cookieSecure bool, sig alertes.Signature) *Server {
+	return &Server{Store: st, Baremes: b, CookieSecure: cookieSecure, Signature: sig, now: time.Now}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -48,6 +51,8 @@ func (s *Server) Routes() http.Handler {
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", s.health)
 		r.Get("/baremes/{annee}", s.getBareme)
+		// Lien signé des e-mails : la page l'appelle en JSON, une messagerie en POST de formulaire (RFC 8058).
+		r.Post("/alertes/desinscription", s.desinscription)
 		r.Group(func(r chi.Router) {
 			r.Use(exigerJSON)
 			r.Post("/auth/register", s.register)
@@ -65,6 +70,10 @@ func (s *Server) Routes() http.Handler {
 			r.Put("/transactions/{id}", s.updateTransaction)
 			r.Delete("/transactions/{id}", s.deleteTransaction)
 			r.Get("/tableau-de-bord", s.tableauDeBord)
+			r.Get("/agenda", s.getAgenda)
+			r.Put("/agenda/{code}", s.putEcheance)
+			r.Get("/alertes/preferences", s.getPreferences)
+			r.Put("/alertes/preferences", s.putPreferences)
 		})
 	})
 	return r
@@ -351,7 +360,7 @@ func (s *Server) putProfil(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Profil.DebutActivite = debut
 	b, _ := s.Baremes.Pour(s.now().Year())
-	if err := calc.Valider(versCalc(in.Profil), b); err != nil {
+	if err := calc.Valider(in.Profil.VersCalc(), b); err != nil {
 		erreur(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -360,13 +369,6 @@ func (s *Server) putProfil(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ecrireJSON(w, http.StatusOK, in)
-}
-
-func versCalc(p store.Profil) calc.Profil {
-	return calc.Profil{
-		Categorie: p.Categorie, CategorieSecondaire: p.CategorieSecondaire, NatureCFP: p.NatureCFP,
-		DebutActivite: p.DebutActivite, ACRE: p.ACRE, VersementLiberatoire: p.VersementLiberatoire,
-	}
 }
 
 // --- Transactions ---
@@ -514,39 +516,168 @@ func (s *Server) deleteTransaction(w http.ResponseWriter, r *http.Request) {
 
 // --- Tableau de bord ---
 
-func (s *Server) tableauDeBord(w http.ResponseWriter, r *http.Request) {
-	annee := s.now().Year()
-	if v := r.URL.Query().Get("annee"); v != "" {
-		a, err := strconv.Atoi(v)
-		if err != nil || a < 2000 || a > 2100 {
-			erreur(w, http.StatusBadRequest, "année invalide")
-			return
-		}
-		annee = a
+// anneeParam lit le paramètre annee, l'année en cours par défaut.
+func (s *Server) anneeParam(w http.ResponseWriter, r *http.Request) (int, bool) {
+	v := r.URL.Query().Get("annee")
+	if v == "" {
+		return alertes.Aujourdhui(s.now()).Year(), true
 	}
-	uid := userID(r.Context())
-	p, err := s.Store.Profil(r.Context(), uid)
+	a, err := strconv.Atoi(v)
+	if err != nil || a < 2000 || a > 2100 {
+		erreur(w, http.StatusBadRequest, "année invalide")
+		return 0, false
+	}
+	return a, true
+}
+
+// profilRequis lit le profil, ou répond 409 s'il n'est pas renseigné.
+func (s *Server) profilRequis(w http.ResponseWriter, r *http.Request) (*store.Profil, bool) {
+	p, err := s.Store.Profil(r.Context(), userID(r.Context()))
 	if errors.Is(err, store.ErrNotFound) {
 		erreur(w, http.StatusConflict, "profil non renseigné")
-		return
+		return nil, false
 	}
 	if err != nil {
 		erreurInterne(w, r, err)
+		return nil, false
+	}
+	return p, true
+}
+
+func (s *Server) tableauDeBord(w http.ResponseWriter, r *http.Request) {
+	annee, ok := s.anneeParam(w, r)
+	if !ok {
 		return
 	}
+	p, ok := s.profilRequis(w, r)
+	if !ok {
+		return
+	}
+	uid := userID(r.Context())
 	txs, err := s.Store.Transactions(r.Context(), uid, time.Date(annee, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(annee, 12, 31, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		erreurInterne(w, r, err)
 		return
 	}
-	entrees := make([]calc.Transaction, 0, len(txs))
-	for _, t := range txs {
-		entrees = append(entrees, calc.Transaction{Type: t.Type, Date: t.Date, Centimes: t.Centimes, Categorie: t.Categorie})
-	}
-	res, err := calc.Calculer(annee, versCalc(*p), entrees, s.Baremes)
+	res, err := calc.Calculer(annee, p.VersCalc(), store.VersCalc(txs), s.Baremes)
 	if err != nil {
 		erreur(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	ecrireJSON(w, http.StatusOK, res)
+}
+
+// --- Agenda ---
+
+type echeanceJSON struct {
+	calc.Echeance
+	Faite   bool   `json:"faite"`
+	FaiteLe string `json:"faite_le,omitempty"`
+}
+
+func (s *Server) getAgenda(w http.ResponseWriter, r *http.Request) {
+	annee, ok := s.anneeParam(w, r)
+	if !ok {
+		return
+	}
+	p, ok := s.profilRequis(w, r)
+	if !ok {
+		return
+	}
+	uid := userID(r.Context())
+	es, err := alertes.Agenda(r.Context(), s.Store, s.Baremes, uid, *p, annee)
+	if err != nil {
+		erreur(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	faites, err := s.Store.EcheancesFaites(r.Context(), uid)
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	res := make([]echeanceJSON, 0, len(es))
+	for _, e := range es {
+		j := echeanceJSON{Echeance: e}
+		if le, ok := faites[e.Code]; ok {
+			j.Faite, j.FaiteLe = true, le.In(alertes.Paris).Format(formatDate)
+		}
+		res = append(res, j)
+	}
+	ecrireJSON(w, http.StatusOK, map[string]any{
+		"annee": annee, "aujourdhui": alertes.Aujourdhui(s.now()).Format(formatDate), "echeances": res,
+	})
+}
+
+var codeEcheance = regexp.MustCompile(`^(urssaf-\d{4}-(0[1-9]|1[0-2]|t[1-4])|revenus-\d{4}|cfe-\d{4})$`)
+
+func (s *Server) putEcheance(w http.ResponseWriter, r *http.Request) {
+	code := chi.URLParam(r, "code")
+	if !codeEcheance.MatchString(code) {
+		erreur(w, http.StatusBadRequest, "code d'échéance invalide")
+		return
+	}
+	var in struct {
+		Faite bool `json:"faite"`
+	}
+	if !lireJSON(w, r, &in) {
+		return
+	}
+	if err := s.Store.MarquerEcheance(r.Context(), userID(r.Context()), code, in.Faite); err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	ecrireJSON(w, http.StatusOK, map[string]any{"code": code, "faite": in.Faite})
+}
+
+// --- Préférences des rappels ---
+
+func (s *Server) getPreferences(w http.ResponseWriter, r *http.Request) {
+	p, err := s.Store.Preferences(r.Context(), userID(r.Context()))
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	ecrireJSON(w, http.StatusOK, p)
+}
+
+func (s *Server) putPreferences(w http.ResponseWriter, r *http.Request) {
+	var in store.Preferences
+	if !lireJSON(w, r, &in) {
+		return
+	}
+	if err := s.Store.SavePreferences(r.Context(), userID(r.Context()), in); err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	ecrireJSON(w, http.StatusOK, in)
+}
+
+// desinscription coupe tous les rappels d'un compte à partir du jeton signé des e-mails.
+func (s *Server) desinscription(w http.ResponseWriter, r *http.Request) {
+	jeton := r.URL.Query().Get("jeton")
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		var in struct {
+			Jeton string `json:"jeton"`
+		}
+		if !lireJSON(w, r, &in) {
+			return
+		}
+		jeton = in.Jeton
+	}
+	uid, ok := s.Signature.Verifier(jeton)
+	if !ok {
+		erreur(w, http.StatusBadRequest, "lien de désinscription invalide")
+		return
+	}
+	err := s.Store.SavePreferences(r.Context(), uid, store.Preferences{})
+	if err != nil {
+		// Compte supprimé entre-temps : plus rien à couper.
+		if _, e := s.Store.UserByID(r.Context(), uid); errors.Is(e, store.ErrNotFound) {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		erreurInterne(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
