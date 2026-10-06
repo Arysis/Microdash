@@ -25,10 +25,11 @@ Toutes les couleurs sont des variables CSS définies dans `web/src/style.css` (`
 | Fond de page | Papier | `#FAF8F5` | `--papier` |
 | Surfaces (cartes, champs) | Blanc | `#FFFFFF` | `--blanc` |
 | Erreur et seuil dépassé, uniquement | Brique | `#B91C1C` | `--brique` |
+| Fond des écrans principaux | Lin chaud | `#F3F0EB` | `--fond-relief` |
 
 Pas de dégradé. Pas de mode sombre pour l'instant : une seule identité claire.
 
-Contrastes vérifiés (WCAG) : encre sur papier 16,5:1, pierre sur papier 7,2:1, blanc sur safran 5,2:1, sarcelle sur blanc 7,6:1, brique sur blanc 6,5:1.
+Contrastes vérifiés (WCAG) : encre sur papier 16,5:1, pierre sur papier 7,2:1, blanc sur safran 5,2:1, sarcelle sur blanc 7,6:1, blanc sur sarcelle 7,6:1, brique sur blanc 6,5:1.
 
 ## Typographie
 
@@ -42,7 +43,7 @@ Deux polices, auto-hébergées avec Fontsource (aucun appel à Google Fonts) :
 | Titre de la vitrine (h1) | 44 px (32 px sous 600 px de large) | 1,1 | Bricolage 700 |
 | Titre de page (h1 de l'app) | 28 px | 1,2 | Bricolage 700 |
 | Titre de section (h2) | 20 px | 1,3 | Bricolage 600 |
-| Chiffre principal | 36 px | 1,1 | Plex 600 |
+| Chiffre principal (revenu net) | 40 px | 1,1 | Plex 700 |
 | Texte courant | 16 px | 1,5 | Plex 400 |
 | Libellés, boutons | 15 px | 1,4 | Plex 500 ou 600 |
 | Légendes, aides | 13 px | 1,45 | Plex 400 |
@@ -51,7 +52,8 @@ Deux polices, auto-hébergées avec Fontsource (aucun appel à Google Fonts) :
 
 - **Un seul rayon d'arrondi : 6 px** (`--rayon`), pour les boutons, cartes, champs, badges, jauges et images. Pas de pilule.
 - Espacements sur une grille de 4 px : 4, 8, 12, 16, 24, 32, 48, 64 (`--e1` à `--e8`).
-- Bordures de 1 px en lin. Pas d'ombre portée, sauf la fenêtre de confirmation.
+- Bordures de 1 px en lin. Pas d'ombre portée, sauf la fenêtre de confirmation et les écrans principaux.
+- **Écrans principaux en relief** (tableau de bord, saisies) : un bandeau sarcelle en haut porte le titre et les filtres, en texte blanc. Les cartes blanches le chevauchent de 48 px, sans bordure, avec une ombre douce (`--ombre-carte`), sur le fond `--fond-relief`. Les autres écrans (compte, profil, connexion, vitrine, pages légales) restent à plat, avec bordure lin.
 - Boutons : **principal** (fond safran, texte blanc) et **secondaire** (fond blanc, bordure lin, texte encre). Les actions destructives prennent le style secondaire avec un texte brique. Hauteur minimale de 44 px.
 - Largeur de lecture maximale : 640 px dans l'app, 1080 px sur la vitrine.
 

@@ -10,11 +10,18 @@ const index = ref(0)
 const donnees = ref(null)
 const profil = ref(null)
 const erreur = ref('')
+const dernieres = ref([])
 
 async function charger() {
   erreur.value = ''
   try {
-    donnees.value = await api.get(`/tableau-de-bord?annee=${annee.value}`)
+    const [d, t] = await Promise.all([
+      api.get(`/tableau-de-bord?annee=${annee.value}`),
+      api.get(`/transactions?du=${annee.value}-01-01&au=${annee.value}-12-31`),
+    ])
+    donnees.value = d
+    // L'API renvoie les saisies de la plus récente à la plus ancienne.
+    dernieres.value = (t || []).slice(0, 3)
   } catch (e) {
     erreur.value = e.message
   }
@@ -48,6 +55,8 @@ const libellePeriode = computed(() => {
   const p = periodes.value[index.value]
   return p ? `${p.libelle} ${annee.value}` : ''
 })
+// Part du chiffre d'affaires qui reste après cotisations et dépenses, en pourcentage entier.
+const partNet = computed(() => (totaux.value?.ca > 0 ? Math.round((totaux.value.net / totaux.value.ca) * 100) : null))
 const impotLibelle = computed(() => (profil.value?.versement_liberatoire ? 'Impôt (versement libératoire)' : null))
 
 function changerVue(v) {
@@ -57,7 +66,7 @@ function changerVue(v) {
 </script>
 
 <template>
-  <section class="carte pile">
+  <div class="bandeau">
     <div class="titre-ligne">
       <h1>Tableau de bord</h1>
       <select v-model="annee" aria-label="Année">
@@ -70,9 +79,11 @@ function changerVue(v) {
       <button :class="{ actif: vue === 'annee' }" @click="changerVue('annee')">Année</button>
     </div>
     <select v-if="vue !== 'annee'" v-model="index" aria-label="Période">
-      <option v-for="(p, i) in periodes" :key="p.debut" :value="i">{{ p.libelle }}</option>
+      <option v-for="(p, i) in periodes" :key="p.debut" :value="i">{{ p.libelle }} {{ annee }}</option>
     </select>
+  </div>
 
+  <section class="carte pile carte-net">
     <p v-if="erreur" class="erreur" role="alert">{{ erreur }}</p>
     <p v-if="donnees && !donnees.bareme_exact" class="encart">
       Pas encore de barème {{ annee }} : les calculs utilisent les taux {{ donnees.bareme_annee }}.
@@ -82,6 +93,7 @@ function changerVue(v) {
       <div class="net">
         <span>Revenu net estimé · {{ libellePeriode }}</span>
         <strong class="chiffres-tab">{{ formatEuros(totaux.net) }}</strong>
+        <small v-if="partNet !== null">{{ partNet }} % de ton chiffre d'affaires</small>
       </div>
       <div v-if="totaux.ca > 0" class="repartition" role="img" :aria-label="`Sur ${formatEuros(totaux.ca)} encaissés, il te reste ${formatEuros(totaux.net)}`">
         <div :style="{ flex: Math.max(totaux.net, 0), background: 'var(--sarcelle)' }"></div>
@@ -89,12 +101,11 @@ function changerVue(v) {
         <div :style="{ flex: totaux.depenses, background: 'var(--pierre)' }"></div>
       </div>
       <dl class="chiffres">
-        <div><dt>Chiffre d'affaires encaissé</dt><dd>{{ formatEuros(totaux.ca) }}</dd></div>
+        <div><dt>Chiffre d'affaires encaissé</dt><dd><strong>{{ formatEuros(totaux.ca) }}</strong></dd></div>
         <div><dt><span class="pastille" style="background: var(--safran)"></span>Cotisations sociales</dt><dd>− {{ formatEuros(totaux.cotisations) }}</dd></div>
         <div><dt><span class="pastille" style="background: var(--safran)"></span>Formation professionnelle (CFP)</dt><dd>− {{ formatEuros(totaux.cfp) }}</dd></div>
         <div v-if="impotLibelle"><dt><span class="pastille" style="background: var(--safran)"></span>{{ impotLibelle }}</dt><dd>− {{ formatEuros(totaux.impot_vl) }}</dd></div>
         <div><dt><span class="pastille" style="background: var(--pierre)"></span>Dépenses</dt><dd>− {{ formatEuros(totaux.depenses) }}</dd></div>
-        <div><dt><span class="pastille" style="background: var(--sarcelle)"></span>Revenu net</dt><dd><strong>{{ formatEuros(totaux.net) }}</strong></dd></div>
       </dl>
       <p v-if="vue === 'annee' && !profil?.versement_liberatoire" class="aide">
         Revenu imposable de l'activité en {{ annee }} : <strong>{{ formatEuros(donnees.revenu_imposable) }}</strong>.
@@ -120,10 +131,31 @@ function changerVue(v) {
     </div>
     <p class="aide">Estimations faites à partir de tes saisies et du barème de l'année. Seule ta déclaration URSSAF fait foi.</p>
   </section>
+
+  <section v-if="dernieres.length" class="carte">
+    <div class="titre-ligne">
+      <h2>Dernières saisies</h2>
+      <RouterLink class="tout-voir" to="/saisies">Tout voir</RouterLink>
+    </div>
+    <ul class="liste">
+      <li v-for="t in dernieres" :key="t.id">
+        <div>
+          <strong>{{ t.libelle || (t.type === 'recette' ? 'Recette' : t.poste) }}</strong>
+          <small>{{ formatDate(t.date) }}<template v-if="t.type === 'depense' && t.libelle"> · {{ t.poste }}</template></small>
+        </div>
+        <span :class="['montant', t.type]">{{ t.type === 'depense' ? '−' : '+' }} {{ formatEuros(t.centimes) }}</span>
+      </li>
+    </ul>
+  </section>
 </template>
 
 <style scoped>
 .net { display: grid; gap: var(--e1); }
-.net span { color: var(--pierre); font-size: 14px; }
-.net strong { font-size: 36px; line-height: 1.1; font-weight: 600; }
+.net span { color: var(--pierre); font-size: 14px; font-weight: 500; }
+.net strong { font-size: 40px; line-height: 1.1; font-weight: 700; letter-spacing: -0.01em; }
+.net small { color: var(--sarcelle); font-size: 13px; font-weight: 600; }
+.carte-net .repartition { height: 12px; }
+/* Dans la carte du revenu net, les lignes respirent sans séparateur, comme sur la maquette. */
+.carte-net .chiffres div { border-bottom: 0; padding-bottom: 0; }
+.tout-voir { font-weight: 600; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
 </style>

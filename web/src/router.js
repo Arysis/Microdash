@@ -9,8 +9,8 @@ const routes = [
   { path: '/inscription', component: () => import('./views/ConnexionView.vue'), props: { mode: 'inscription' }, meta: { acces: 'invite', titre: 'Créer un compte', description: 'Crée ton compte Microdash gratuit avec une adresse e-mail.' } },
   { path: '/mentions-legales', component: () => import('./views/MentionsLegalesView.vue'), meta: { acces: 'public', titre: 'Mentions légales', description: "Éditeur et hébergeur du site Microdash." } },
   { path: '/confidentialite', component: () => import('./views/ConfidentialiteView.vue'), meta: { acces: 'public', titre: 'Confidentialité', description: 'Les données que Microdash garde, pourquoi, combien de temps, et comment les effacer.' } },
-  { path: '/tableau-de-bord', component: () => import('./views/TableauDeBordView.vue'), meta: { acces: 'membre', titre: 'Tableau de bord' } },
-  { path: '/saisies', component: () => import('./views/TransactionsView.vue'), meta: { acces: 'membre', titre: 'Saisies' } },
+  { path: '/tableau-de-bord', component: () => import('./views/TableauDeBordView.vue'), meta: { acces: 'membre', titre: 'Tableau de bord', relief: true } },
+  { path: '/saisies', component: () => import('./views/TransactionsView.vue'), meta: { acces: 'membre', titre: 'Saisies', relief: true } },
   { path: '/profil', component: () => import('./views/ProfilView.vue'), meta: { acces: 'membre', titre: 'Ton activité' } },
   { path: '/compte', component: () => import('./views/CompteView.vue'), meta: { acces: 'membre', titre: 'Compte' } },
   // Anciennes adresses du socle.

@@ -8,13 +8,15 @@ import FenetreConfirmation from './components/FenetreConfirmation.vue'
 
 const route = useRoute()
 const miseEnPageApp = computed(() => route.meta.acces === 'membre')
+// Les écrans principaux (meta.relief) ont un bandeau sarcelle et des cartes ombrées.
+const relief = computed(() => Boolean(route.meta.relief))
 const annee = new Date().getFullYear()
 const icone = { size: 24, 'stroke-width': 1.75, 'aria-hidden': 'true' }
 </script>
 
 <template>
-  <template v-if="miseEnPageApp">
-    <header class="entete-app">
+  <div v-if="miseEnPageApp" :class="{ 'ecran-relief': relief }">
+    <header :class="['entete-app', { relief }]">
       <RouterLink to="/tableau-de-bord" aria-label="Microdash, tableau de bord"><LogoMicrodash /></RouterLink>
     </header>
     <main class="contenu-app">
@@ -25,7 +27,7 @@ const icone = { size: 24, 'stroke-width': 1.75, 'aria-hidden': 'true' }
       <RouterLink to="/saisies"><List v-bind="icone" />Saisies</RouterLink>
       <RouterLink to="/compte"><CircleUser v-bind="icone" />Compte</RouterLink>
     </nav>
-  </template>
+  </div>
 
   <template v-else>
     <header class="entete-public">
@@ -65,7 +67,10 @@ const icone = { size: 24, 'stroke-width': 1.75, 'aria-hidden': 'true' }
   padding: calc(env(safe-area-inset-top) + var(--e3)) var(--e4) var(--e3);
   background: var(--papier); border-bottom: 1px solid var(--lin);
 }
-.entete-app a { text-decoration: none; display: inline-flex; }
+.entete-app a { text-decoration: none; display: inline-flex; color: var(--encre); }
+.entete-app.relief { background: var(--sarcelle); border-bottom-color: var(--sarcelle); }
+.entete-app.relief a { color: var(--blanc); }
+.entete-app.relief :focus-visible { outline-color: var(--blanc); }
 .contenu-app { max-width: 640px; margin: 0 auto; padding: var(--e5) var(--e4) calc(96px + env(safe-area-inset-bottom)); }
 
 .onglets {
@@ -85,7 +90,7 @@ const icone = { size: 24, 'stroke-width': 1.75, 'aria-hidden': 'true' }
 .largeur { max-width: 1080px; margin: 0 auto; padding: 0 var(--e4); }
 .entete-public { border-bottom: 1px solid var(--lin); background: var(--papier); }
 .entete-public .largeur { display: flex; justify-content: space-between; align-items: center; gap: var(--e3); min-height: 64px; }
-.entete-public a:first-child { text-decoration: none; display: inline-flex; }
+.entete-public a:first-child { text-decoration: none; display: inline-flex; color: var(--encre); }
 .liens-entete { display: flex; align-items: center; gap: var(--e4); }
 .lien-entete { color: var(--encre); font-weight: 500; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
 .lien-entete:hover { color: var(--safran); }

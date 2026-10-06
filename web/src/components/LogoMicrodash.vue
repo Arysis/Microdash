@@ -15,5 +15,5 @@ defineProps({ avecNom: { type: Boolean, default: true } })
 
 <style scoped>
 .logo { display: inline-flex; align-items: center; gap: var(--e2); }
-.nom { font: 700 19px var(--police-titre); color: var(--encre); letter-spacing: -0.01em; }
+.nom { font: 700 19px var(--police-titre); color: inherit; letter-spacing: -0.01em; }
 </style>

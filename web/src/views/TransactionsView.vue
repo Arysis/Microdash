@@ -57,7 +57,7 @@ function editer(t) {
     libelle: t.libelle,
     tiers: t.tiers,
   })
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
 }
 
 async function enregistrer() {
@@ -103,8 +103,12 @@ async function supprimer(t) {
 </script>
 
 <template>
+  <div class="bandeau">
+    <h1>Saisies</h1>
+  </div>
+
   <section class="carte pile">
-    <h1>{{ enEdition ? 'Modifier la saisie' : 'Nouvelle saisie' }}</h1>
+    <h2>{{ enEdition ? 'Modifier la saisie' : 'Nouvelle saisie' }}</h2>
     <form @submit.prevent="enregistrer">
       <div class="bascule">
         <button type="button" :class="{ actif: saisie.type === 'recette' }" @click="saisie.type = 'recette'">Recette</button>

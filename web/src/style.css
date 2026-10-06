@@ -14,6 +14,12 @@
   /* Encre transparente, pour le voile et l'ombre de la fenêtre de confirmation. */
   --voile: rgba(28, 25, 23, 0.4);
   --ombre: 0 8px 32px rgba(28, 25, 23, 0.18);
+  /* Relief des écrans principaux (tableau de bord, saisies). */
+  --fond-relief: #f3f0eb;
+  --ombre-carte: 0 1px 2px rgba(28, 25, 23, 0.06), 0 6px 20px rgba(28, 25, 23, 0.08);
+  /* Blanc transparent, pour les contrôles posés sur le bandeau sarcelle. */
+  --sur-sarcelle: rgba(255, 255, 255, 0.14);
+  --bord-sur-sarcelle: rgba(255, 255, 255, 0.35);
 
   --police-titre: 'Bricolage Grotesque', Georgia, serif;
   --police-texte: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
@@ -155,6 +161,26 @@ dialog.confirmation::backdrop { background: var(--voile); }
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 .carte + .carte { margin-top: var(--e4); }
+
+/* --- Écrans principaux en relief : bandeau sarcelle, cartes ombrées qui le chevauchent --- */
+.ecran-relief { background: var(--fond-relief); min-height: 100vh; }
+.ecran-relief .carte { border-color: transparent; box-shadow: var(--ombre-carte); }
+.bandeau {
+  /* Pleine largeur sans débordement : l'ombre et la découpe prolongent le fond sur les côtés. */
+  background: var(--sarcelle); color: var(--blanc);
+  box-shadow: 0 0 0 100vmax var(--sarcelle); clip-path: inset(0 -100vmax);
+  margin-top: calc(-1 * var(--e5)); padding: var(--e4) 0 var(--e8);
+  display: grid; gap: var(--e4);
+}
+.bandeau + * { margin-top: calc(-1 * var(--e7)); position: relative; }
+.bandeau h1 { color: var(--blanc); }
+.bandeau :focus-visible { outline-color: var(--blanc); }
+.bandeau select { background: transparent; color: var(--blanc); border-color: var(--bord-sur-sarcelle); font-weight: 500; }
+.bandeau select:hover { border-color: var(--blanc); }
+.bandeau select option { color: var(--encre); }
+.bandeau .bascule { background: var(--sur-sarcelle); }
+.bandeau .bascule button { color: var(--blanc); }
+.bandeau .bascule button.actif { background: var(--blanc); color: var(--sarcelle); }
 
 /* --- Pages publiques --- */
 .largeur-lecture { max-width: 720px; margin: 0 auto; padding: 0 var(--e4); }
