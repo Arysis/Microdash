@@ -197,7 +197,7 @@ async function supprimer(t) {
   </div>
 
   <section class="carte pile">
-    <h2>{{ enEdition ? 'Modifier la saisie' : 'Nouvelle saisie' }}</h2>
+    <h2>{{ enEdition ? 'Modifier la saisie' : 'Nouvelle saisie' }} <InfoBulle k="recetteDepense" /></h2>
     <form @submit.prevent="enregistrer">
       <div class="bascule">
         <button type="button" :class="{ actif: saisie.type === 'recette' }" @click="saisie.type = 'recette'">Recette</button>
@@ -214,17 +214,20 @@ async function supprimer(t) {
         </select>
       </label>
       <label v-if="saisie.type === 'depense'">
-        Poste
+        <span>Poste <InfoBulle k="poste" /></span>
         <select v-model="saisie.poste">
           <option v-for="p in postesDepense" :key="p">{{ p }}</option>
         </select>
       </label>
-      <div v-if="peutRevenir" class="bascule petite" role="group" aria-label="Fréquence">
+      <div v-if="peutRevenir" class="frequence">
+      <div class="bascule petite" role="group" aria-label="Fréquence">
         <button type="button" :class="{ actif: saisie.frequence === 'ponctuelle' }" @click="saisie.frequence = 'ponctuelle'">Ponctuelle</button>
         <button type="button" :class="{ actif: saisie.frequence === 'mensuelle' }" @click="saisie.frequence = 'mensuelle'">Tous les mois</button>
       </div>
+      <InfoBulle k="frequence" />
+      </div>
       <label v-if="estURSSAF">
-        Pour la déclaration
+        <span>Pour la déclaration <InfoBulle k="declarationPayee" /></span>
         <select v-model="saisie.echeance" required>
           <option v-if="!declarations.length" value="" disabled>Aucune déclaration avant cette date</option>
           <option v-for="e in declarations" :key="e.code" :value="e.code">
@@ -282,3 +285,8 @@ async function supprimer(t) {
     </ul>
   </section>
 </template>
+
+<style scoped>
+.frequence { display: flex; align-items: center; gap: var(--e3); }
+.frequence .bascule { flex: 1; }
+</style>

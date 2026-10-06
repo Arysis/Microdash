@@ -177,7 +177,7 @@ function changerVue(v) {
 
     <template v-if="totaux">
       <div class="net">
-        <span>Revenu net estimé · {{ libellePeriode }}</span>
+        <span>Revenu net estimé · {{ libellePeriode }} <InfoBulle k="revenuNet" /></span>
         <strong class="chiffres-tab">{{ formatEuros(totaux.net) }}</strong>
         <small v-if="partNet !== null">{{ partNet }} % de ton chiffre d'affaires</small>
       </div>
@@ -187,10 +187,10 @@ function changerVue(v) {
         <div :style="{ flex: totaux.depenses, background: 'var(--pierre)' }"></div>
       </div>
       <dl class="chiffres">
-        <div><dt>Chiffre d'affaires encaissé</dt><dd><strong>{{ formatEuros(totaux.ca) }}</strong></dd></div>
+        <div><dt>Chiffre d'affaires encaissé <InfoBulle k="caEncaisse" /></dt><dd><strong>{{ formatEuros(totaux.ca) }}</strong></dd></div>
         <div v-if="vue === 'annee'" class="bloc-urssaf">
           <dt>
-            <span class="pastille" style="background: var(--safran)"></span>{{ profil?.versement_liberatoire ? "URSSAF et impôt de l'année" : "URSSAF de l'année" }}
+            <span class="pastille" style="background: var(--safran)"></span>{{ profil?.versement_liberatoire ? "URSSAF et impôt de l'année" : "URSSAF de l'année" }} <InfoBulle k="urssafAnnee" />
             <small>{{ libelleRythme }}</small>
           </dt>
           <dd>− {{ formatEuros(urssafAnnee.paye + urssafAnnee.reste) }}</dd>
@@ -207,16 +207,16 @@ function changerVue(v) {
         </template>
         <template v-else>
           <div v-if="totaux.urssaf_paye > 0">
-            <dt><span class="pastille" style="background: var(--safran)"></span>{{ profil?.versement_liberatoire ? 'URSSAF et impôt payés' : 'URSSAF payé' }}</dt>
+            <dt><span class="pastille" style="background: var(--safran)"></span>{{ profil?.versement_liberatoire ? 'URSSAF et impôt payés' : 'URSSAF payé' }} <InfoBulle k="urssafPaye" /></dt>
             <dd>− {{ formatEuros(totaux.urssaf_paye) }}</dd>
           </div>
           <template v-if="estimationVisible">
-            <div><dt><span class="pastille" style="background: var(--safran)"></span>Cotisations sociales{{ suffixeEstime }}</dt><dd>− {{ formatEuros(totaux.cotisations) }}</dd></div>
-            <div><dt><span class="pastille" style="background: var(--safran)"></span>Formation professionnelle (CFP){{ suffixeEstime }}</dt><dd>− {{ formatEuros(totaux.cfp) }}</dd></div>
-            <div v-if="impotLibelle"><dt><span class="pastille" style="background: var(--safran)"></span>{{ impotLibelle }}{{ suffixeEstime }}</dt><dd>− {{ formatEuros(totaux.impot_vl) }}</dd></div>
+            <div><dt><span class="pastille" style="background: var(--safran)"></span>Cotisations sociales{{ suffixeEstime }} <InfoBulle k="cotisations" /></dt><dd>− {{ formatEuros(totaux.cotisations) }}</dd></div>
+            <div><dt><span class="pastille" style="background: var(--safran)"></span>Formation professionnelle (CFP){{ suffixeEstime }} <InfoBulle k="cfp" /></dt><dd>− {{ formatEuros(totaux.cfp) }}</dd></div>
+            <div v-if="impotLibelle"><dt><span class="pastille" style="background: var(--safran)"></span>{{ impotLibelle }}{{ suffixeEstime }} <InfoBulle k="versementLiberatoire" /></dt><dd>− {{ formatEuros(totaux.impot_vl) }}</dd></div>
           </template>
         </template>
-        <div><dt><span class="pastille" style="background: var(--pierre)"></span>Dépenses</dt><dd>− {{ formatEuros(totaux.depenses) }}</dd></div>
+        <div><dt><span class="pastille" style="background: var(--pierre)"></span>Dépenses <InfoBulle k="depenses" /></dt><dd>− {{ formatEuros(totaux.depenses) }}</dd></div>
       </dl>
       <details v-if="vue === 'annee' && declarations.length" class="detail-declarations">
         <summary>Voir le détail par déclaration</summary>
@@ -231,10 +231,10 @@ function changerVue(v) {
         </ul>
       </details>
       <p v-if="vue === 'annee' && !profil?.versement_liberatoire" class="aide">
-        Revenu imposable de l'activité en {{ annee }} : <strong>{{ formatEuros(donnees.revenu_imposable) }}</strong>.
+        Revenu imposable de l'activité en {{ annee }} <InfoBulle k="revenuImposable" /> : <strong>{{ formatEuros(donnees.revenu_imposable) }}</strong>.
         C'est ton chiffre d'affaires après abattement. Il s'ajoute à tes autres revenus dans ta déclaration d'impôt.
       </p>
-      <p v-if="donnees.fin_acre" class="aide">ACRE appliquée jusqu'au {{ formatDate(donnees.fin_acre) }}.</p>
+      <p v-if="donnees.fin_acre" class="aide">ACRE appliquée jusqu'au {{ formatDate(donnees.fin_acre) }}. <InfoBulle k="acre" /></p>
     </template>
   </section>
 
@@ -253,7 +253,7 @@ function changerVue(v) {
     <h2>Plafonds {{ annee }}</h2>
     <div v-for="p in donnees.plafonds" :key="p.code" class="jauge">
       <div class="titre-ligne">
-        <span>{{ p.libelle }}</span>
+        <span>{{ p.libelle }} <InfoBulle :k="p.code.startsWith('tva_') ? 'seuilTVA' : 'plafondMicro'" /></span>
         <small class="chiffres-tab">{{ Math.round(p.ratio * 100) }} %</small>
       </div>
       <div class="barre" :class="p.niveau">

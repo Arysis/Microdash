@@ -57,14 +57,14 @@ async function enregistrer() {
     </p>
     <form @submit.prevent="enregistrer">
       <label>
-        Type d'activité
+        <span>Type d'activité <InfoBulle k="typeActivite" /></span>
         <select v-model="profil.categorie" required>
           <option disabled value="">Choisis…</option>
           <option v-for="c in categories" :key="c.code" :value="c.code">{{ c.libelle }}</option>
         </select>
       </label>
 
-      <label class="case"><input v-model="mixte" type="checkbox" /> Activité mixte (vente et services)</label>
+      <label class="case"><input v-model="mixte" type="checkbox" /> <span>Activité mixte (vente et services) <InfoBulle k="activiteMixte" /></span></label>
       <label v-if="mixte">
         Seconde activité
         <select v-model="profil.categorie_secondaire" required>
@@ -78,7 +78,7 @@ async function enregistrer() {
       </label>
 
       <label>
-        Nature de l'activité (formation professionnelle)
+        <span>Nature de l'activité (formation professionnelle) <InfoBulle k="natureCFP" /></span>
         <select v-model="profil.nature_cfp" required>
           <option value="commercant">Commerçant</option>
           <option value="artisan">Artisan</option>
@@ -86,19 +86,19 @@ async function enregistrer() {
         </select>
       </label>
 
-      <label>Date de début d'activité <input v-model="profil.debut_activite" type="date" required /></label>
+      <label><span>Date de début d'activité <InfoBulle k="debutActivite" /></span> <input v-model="profil.debut_activite" type="date" required /></label>
 
       <label>
-        Périodicité des déclarations URSSAF
+        <span>Périodicité des déclarations URSSAF <InfoBulle k="periodicite" /></span>
         <select v-model="profil.periodicite">
           <option value="mensuelle">Mensuelle</option>
           <option value="trimestrielle">Trimestrielle</option>
         </select>
       </label>
 
-      <label class="case"><input v-model="profil.acre" type="checkbox" /> Je bénéficie de l'ACRE</label>
+      <label class="case"><input v-model="profil.acre" type="checkbox" /> <span>Je bénéficie de l'ACRE <InfoBulle k="acre" /></span></label>
       <label class="case">
-        <input v-model="profil.versement_liberatoire" type="checkbox" /> J'ai opté pour le versement libératoire de l'impôt
+        <input v-model="profil.versement_liberatoire" type="checkbox" /> <span>J'ai opté pour le versement libératoire de l'impôt <InfoBulle k="versementLiberatoire" /></span>
       </label>
 
       <p v-if="erreur" class="erreur" role="alert">{{ erreur }}</p>
