@@ -28,6 +28,10 @@ services:
       DATABASE_URL: postgres://microdash:${POSTGRES_PASSWORD}@db:5432/microdash?sslmode=disable
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
+      ALERTES_SECRET: ${ALERTES_SECRET:-}
+      ALERTES_EXPEDITEUR: ${ALERTES_EXPEDITEUR:-}
+      ALERTES_LIMITER_A: ${ALERTES_LIMITER_A:-}
+      SITE_URL: ${SITE_URL:-}
     depends_on:
       db:
         condition: service_healthy

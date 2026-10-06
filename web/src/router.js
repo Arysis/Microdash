@@ -11,6 +11,8 @@ const routes = [
   { path: '/confidentialite', component: () => import('./views/ConfidentialiteView.vue'), meta: { acces: 'public', titre: 'Confidentialité', description: 'Les données que Microdash garde, pourquoi, combien de temps, et comment les effacer.' } },
   { path: '/tableau-de-bord', component: () => import('./views/TableauDeBordView.vue'), meta: { acces: 'membre', titre: 'Tableau de bord', relief: true } },
   { path: '/saisies', component: () => import('./views/TransactionsView.vue'), meta: { acces: 'membre', titre: 'Saisies', relief: true } },
+  { path: '/agenda', component: () => import('./views/AgendaView.vue'), meta: { acces: 'membre', titre: 'Agenda', relief: true } },
+  { path: '/desinscription', component: () => import('./views/DesinscriptionView.vue'), meta: { acces: 'public', titre: 'Rappels par e-mail', noindex: true } },
   { path: '/profil', component: () => import('./views/ProfilView.vue'), meta: { acces: 'membre', titre: 'Ton activité' } },
   { path: '/compte', component: () => import('./views/CompteView.vue'), meta: { acces: 'membre', titre: 'Compte' } },
   // Anciennes adresses du socle.

@@ -63,3 +63,11 @@ cfp:
 
 # Revenu imposable minimum après abattement (en euros).
 abattement_minimum: 305
+
+# Dates de l'agenda hors URSSAF (à vérifier chaque année).
+echeances:
+  # CFE : paiement au plus tard le 15 décembre. Pas due l'année de création.
+  cfe: { mois: 12, jour: 15 }
+  # Déclaration de revenus : la date dépend du département et n'est publiée qu'au printemps.
+  # Laisser vide (null) tant qu'elle n'est pas connue.
+  declaration_revenus: null

@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { House, List, CircleUser } from 'lucide-vue-next'
+import { House, List, Calendar, CircleUser } from 'lucide-vue-next'
 import { session } from './session.js'
 import LogoMicrodash from './components/LogoMicrodash.vue'
 import FenetreConfirmation from './components/FenetreConfirmation.vue'
@@ -25,6 +25,7 @@ const icone = { size: 24, 'stroke-width': 1.75, 'aria-hidden': 'true' }
     <nav v-if="session.user?.profil_complet" class="onglets" aria-label="Navigation principale">
       <RouterLink to="/tableau-de-bord"><House v-bind="icone" />Accueil</RouterLink>
       <RouterLink to="/saisies"><List v-bind="icone" />Saisies</RouterLink>
+      <RouterLink to="/agenda"><Calendar v-bind="icone" />Agenda</RouterLink>
       <RouterLink to="/compte"><CircleUser v-bind="icone" />Compte</RouterLink>
     </nav>
   </div>

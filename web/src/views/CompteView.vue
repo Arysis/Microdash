@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
+import { api } from '../api.js'
 import { useRouter } from 'vue-router'
 import { LogOut, Trash2, ChevronRight } from 'lucide-vue-next'
 import { session, deconnecter, supprimerCompte } from '../session.js'
@@ -8,6 +9,35 @@ import { demanderConfirmation } from '../confirmation.js'
 const router = useRouter()
 const erreur = ref('')
 const icone = { size: 20, 'stroke-width': 1.75, 'aria-hidden': 'true' }
+
+const rappels = [
+  { cle: 'echeances', titre: 'Échéances', aide: 'URSSAF et impôts : 7 jours avant, puis la veille' },
+  { cle: 'plafond', titre: 'Plafond micro-entreprise', aide: "À 80 %, puis s'il est dépassé" },
+  { cle: 'tva', titre: 'Franchise de TVA', aide: "À 80 %, puis si elle est dépassée" },
+  { cle: 'cfe', titre: 'CFE', aide: 'Rappel en décembre, à confirmer pour ton cas' },
+]
+const preferences = ref(null)
+const erreurRappels = ref('')
+
+onMounted(async () => {
+  try {
+    preferences.value = await api.get('/alertes/preferences')
+  } catch (e) {
+    erreurRappels.value = e.message
+  }
+})
+
+async function changerRappel(cle, valeur) {
+  erreurRappels.value = ''
+  const avant = { ...preferences.value }
+  preferences.value = { ...preferences.value, [cle]: valeur }
+  try {
+    preferences.value = await api.put('/alertes/preferences', preferences.value)
+  } catch (e) {
+    preferences.value = avant
+    erreurRappels.value = e.message
+  }
+}
 
 async function quitter() {
   erreur.value = ''
@@ -53,6 +83,18 @@ async function supprimer() {
     </RouterLink>
   </section>
 
+  <section class="carte rappels" aria-labelledby="titre-rappels">
+    <h2 id="titre-rappels">Rappels par e-mail</h2>
+    <template v-if="preferences">
+      <label v-for="r in rappels" :key="r.cle" class="interrupteur">
+        <span>{{ r.titre }}<small class="aide">{{ r.aide }}</small></span>
+        <input type="checkbox" role="switch" :checked="preferences[r.cle]" @change="changerRappel(r.cle, $event.target.checked)" />
+      </label>
+    </template>
+    <p v-if="erreurRappels" class="erreur" role="alert">{{ erreurRappels }}</p>
+    <p class="aide">Envoyés à {{ session.user?.email }}. Chaque e-mail contient un lien pour te désinscrire.</p>
+  </section>
+
   <section class="carte pile">
     <button class="bouton secondaire" @click="quitter"><LogOut v-bind="icone" />Se déconnecter</button>
   </section>
@@ -80,6 +122,16 @@ h1 { margin-bottom: var(--e5); }
 }
 .ligne-lien small { display: block; font-weight: 400; }
 .ligne-lien:hover { color: var(--safran); }
+.rappels h2 { margin-bottom: var(--e2); }
+.interrupteur {
+  display: flex; justify-content: space-between; align-items: center; gap: var(--e3);
+  min-height: 52px; padding: var(--e2) 0; border-bottom: 1px solid var(--lin);
+}
+.interrupteur:last-of-type { border-bottom: 0; }
+.interrupteur span { display: grid; gap: 2px; }
+.interrupteur small { font-weight: 400; }
+.interrupteur input { width: 20px; height: 20px; margin: 0; flex-shrink: 0; accent-color: var(--safran); }
+.rappels .aide:last-child { margin-top: var(--e2); }
 .liens-legaux { display: flex; gap: var(--e5); margin-top: var(--e5); }
 .liens-legaux a { color: var(--pierre); }
 </style>

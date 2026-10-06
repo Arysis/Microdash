@@ -18,6 +18,8 @@ const ac = 'À COMPLÉTER'
       <li><strong>Ton mot de passe</strong>, jamais en clair : seule une empreinte chiffrée (argon2id) est enregistrée.</li>
       <li><strong>Ton profil d'activité</strong> : catégorie, nature de l'activité, date de début, ACRE, versement libératoire, périodicité de déclaration.</li>
       <li><strong>Tes saisies</strong> : recettes et dépenses, avec leur date, leur montant, leur catégorie, leur libellé et, si tu le notes, le nom du client ou du fournisseur.</li>
+      <li><strong>Ton agenda</strong> : les échéances que tu as cochées comme faites, et la date où tu les as cochées.</li>
+      <li><strong>Tes rappels par e-mail</strong> : ceux que tu as activés ou coupés, et la liste des rappels déjà envoyés, pour ne jamais t'envoyer deux fois le même.</li>
     </ul>
     <p>Nous ne demandons ni ton nom, ni ton numéro de téléphone, ni tes coordonnées bancaires.</p>
 
@@ -27,7 +29,7 @@ const ac = 'À COMPLÉTER'
 
     <h2>Combien de temps</h2>
     <ul>
-      <li>Ton compte, ton profil et tes saisies : jusqu'à ce que tu supprimes ton compte.</li>
+      <li>Ton compte, ton profil, tes saisies, ton agenda et tes réglages de rappels : jusqu'à ce que tu supprimes ton compte.</li>
       <li>Ta session de connexion : 30 jours au plus, ou jusqu'à ce que tu te déconnectes.</li>
       <li>Les journaux techniques du serveur (adresse IP, page demandée) : <span class="a-completer">[{{ ac }} : durée]</span>.</li>
     </ul>
@@ -36,8 +38,9 @@ const ac = 'À COMPLÉTER'
     <ul>
       <li>L'éditeur du site, pour faire fonctionner le service.</li>
       <li>L'hébergeur du serveur : <span class="a-completer">[{{ ac }} : nom et pays]</span>.</li>
+      <li>Resend, le service qui envoie les rappels par e-mail. Il reçoit ton adresse e-mail et le contenu du rappel : l'échéance, sa date et les montants estimés. Resend est une société américaine : <span class="a-completer">[{{ ac }} : garanties du transfert hors de l'Union européenne, voir l'accord de traitement des données de Resend]</span>.</li>
     </ul>
-    <p>Microdash n'envoie pas encore d'e-mail. Quand les rappels d'échéances arriveront, ils passeront par le service Resend. Cette page sera mise à jour avant.</p>
+    <p>Les rappels sont activés à la création du compte. Tu les coupes un par un dans l'écran Compte, ou tous d'un coup avec le lien en bas de chaque e-mail.</p>
 
     <h2>Cookies et stockage sur ton appareil</h2>
     <p>Microdash utilise un seul cookie, nommé « session ». Il te garde connecté et il est indispensable au service. Il n'y a aucun cookie de mesure d'audience ni de publicité : c'est pour cela qu'aucun bandeau ne te demande ton accord.</p>

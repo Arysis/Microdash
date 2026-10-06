@@ -50,6 +50,18 @@ type ACRE struct {
 	Reduction           float64 `yaml:"reduction"`
 }
 
+// Echeances regroupe les dates fixes de l'agenda qui ne viennent pas de l'URSSAF.
+type Echeances struct {
+	// CFE : date limite de paiement de la cotisation foncière des entreprises.
+	CFE struct {
+		Mois int `yaml:"mois"`
+		Jour int `yaml:"jour"`
+	} `yaml:"cfe"`
+	// DeclarationRevenus : date limite de la déclaration en ligne de la zone la plus tôt ;
+	// nil tant qu'elle n'est pas publiée.
+	DeclarationRevenus *Date `yaml:"declaration_revenus"`
+}
+
 type Bareme struct {
 	Annee             int                  `yaml:"annee"`
 	Categories        map[string]Categorie `yaml:"categories"`
@@ -57,11 +69,16 @@ type Bareme struct {
 	ACRE              []ACRE               `yaml:"acre"`
 	CFP               map[string]float64   `yaml:"cfp"`
 	AbattementMinimum float64              `yaml:"abattement_minimum"`
+	Echeances         Echeances            `yaml:"echeances"`
 }
 
 // TauxCotisation renvoie le taux plein de la catégorie en vigueur à la date donnée.
+// Avant le premier taux du barème (barème d'une autre année), c'est ce premier taux qui s'applique.
 func (c Categorie) TauxCotisation(d time.Time) float64 {
-	taux := 0.0
+	if len(c.Cotisations) == 0 {
+		return 0
+	}
+	taux := c.Cotisations[0].Taux
 	for _, t := range c.Cotisations {
 		if !d.Before(t.Depuis.Time) {
 			taux = t.Taux
