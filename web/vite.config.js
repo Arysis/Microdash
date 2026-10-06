@@ -52,7 +52,8 @@ export default defineConfig({
             urlPattern: ({ url }) => url.pathname.startsWith('/api/transactions'),
             handler: 'NetworkOnly',
             method,
-            options: { backgroundSync: { name: 'saisies', options: { maxRetentionTime: 7 * 24 * 60 } } },
+            // Un nom de file par méthode : Workbox refuse deux files du même nom.
+            options: { backgroundSync: { name: `saisies-${method.toLowerCase()}`, options: { maxRetentionTime: 7 * 24 * 60 } } },
           })),
         ],
       },
