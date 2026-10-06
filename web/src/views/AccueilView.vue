@@ -1,5 +1,5 @@
 <script setup>
-import { Receipt, Calculator, Wallet, Gauge, Smartphone, CalendarClock, Mail, FileDown } from 'lucide-vue-next'
+import { Receipt, Calculator, Wallet, Gauge, Smartphone, CalendarClock, Mail, FileDown, ChartColumn } from 'lucide-vue-next'
 
 const icone = { size: 20, 'stroke-width': 1.75, 'aria-hidden': 'true' }
 
@@ -29,6 +29,11 @@ const fonctions = [
     icone: CalendarClock,
     titre: 'Ne rater aucune échéance',
     texte: "Un agenda de tes déclarations URSSAF, de ta déclaration de revenus et de la CFE, avec le montant à déclarer. Tu coches quand c'est fait.",
+  },
+  {
+    icone: ChartColumn,
+    titre: 'Prévoir ta trésorerie',
+    texte: "Ce qui entre et sort chaque mois, et une prévision sur 6 mois avec tes dépenses récurrentes et tes paiements URSSAF. Tu peux y connecter ton compte Stripe pour suivre le revenu de tes abonnements.",
   },
   {
     icone: FileDown,
