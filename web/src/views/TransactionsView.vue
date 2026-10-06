@@ -160,7 +160,7 @@ async function supprimer(t) {
       <li v-for="t in visibles" :key="t.id">
         <div>
           <strong>{{ t.libelle || (t.type === 'recette' ? 'Recette' : t.poste) }}</strong>
-          <small>{{ formatDate(t.date) }}<template v-if="t.tiers"> · {{ t.tiers }}</template><template v-if="t.type === 'depense' && t.libelle"> · {{ t.poste }}</template></small>
+          <small>{{ formatDate(t.date) }}<template v-if="t.tiers"> · {{ t.tiers }}</template><template v-if="t.type === 'depense' && t.libelle"> · {{ t.poste }}</template><template v-if="t.recurrente"> · récurrente</template></small>
         </div>
         <span :class="['montant', t.type]">{{ t.type === 'depense' ? '−' : '+' }}{{ formatEuros(t.centimes) }}</span>
         <div class="actions">

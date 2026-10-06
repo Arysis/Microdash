@@ -19,6 +19,7 @@ import (
 	"github.com/arysis/microdash/api/baremes"
 	"github.com/arysis/microdash/api/internal/alertes"
 	"github.com/arysis/microdash/api/internal/bareme"
+	"github.com/arysis/microdash/api/internal/chiffre"
 	"github.com/arysis/microdash/api/internal/httpapi"
 	"github.com/arysis/microdash/api/internal/store"
 )
@@ -72,9 +73,20 @@ func run() error {
 		return err
 	}
 
+	api := httpapi.New(st, set, env("COOKIE_SECURE", "true") == "true", sig)
+	if v := os.Getenv("CLE_CHIFFREMENT"); v != "" {
+		if api.Chiffre, err = chiffre.Depuis(v); err != nil {
+			return fmt.Errorf("CLE_CHIFFREMENT : %w", err)
+		}
+	} else {
+		slog.Info("connexion Stripe désactivée : CLE_CHIFFREMENT vide")
+	}
+	api.StripeURL = os.Getenv("STRIPE_API_URL") // tests uniquement : faux serveur Stripe
+	go genererRecurrentes(ctx, st)
+
 	srv := &http.Server{
 		Addr:              ":" + env("PORT", "8080"),
-		Handler:           httpapi.New(st, set, env("COOKIE_SECURE", "true") == "true", sig).Routes(),
+		Handler:           api.Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
@@ -132,4 +144,22 @@ func lancerAlertes(ctx context.Context, st *store.Store, set *bareme.Set, sig al
 	slog.Info("rappels par e-mail activés", "chaque_jour", "8 h, heure de Paris", "limites_a", len(limiter))
 	go svc.Planifier(ctx)
 	return nil
+}
+
+// genererRecurrentes crée, au démarrage puis chaque jour à 8 h (Paris), les saisies des dépenses
+// récurrentes arrivées à échéance pour tous les comptes.
+func genererRecurrentes(ctx context.Context, st *store.Store) {
+	for {
+		n, err := st.GenererRecurrentes(ctx, 0, alertes.Aujourdhui(time.Now()))
+		if err != nil {
+			slog.Error("dépenses récurrentes", "err", err)
+		} else if n > 0 {
+			slog.Info("dépenses récurrentes saisies", "nombre", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Until(alertes.ProchainPassage(time.Now()))):
+		}
+	}
 }

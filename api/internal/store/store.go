@@ -184,13 +184,15 @@ type Transaction struct {
 	Poste     string    `json:"poste"`
 	Libelle   string    `json:"libelle"`
 	Tiers     string    `json:"tiers"`
+	// Recurrente : saisie créée par une dépense récurrente.
+	Recurrente bool `json:"recurrente"`
 }
 
-const colonnesTx = `id, type, date, centimes, categorie, poste, libelle, tiers`
+const colonnesTx = `id, type, date, centimes, categorie, poste, libelle, tiers, recurrente_id IS NOT NULL`
 
 func scanTx(row pgx.Row) (*Transaction, error) {
 	t := &Transaction{}
-	err := row.Scan(&t.ID, &t.Type, &t.Date, &t.Centimes, &t.Categorie, &t.Poste, &t.Libelle, &t.Tiers)
+	err := row.Scan(&t.ID, &t.Type, &t.Date, &t.Centimes, &t.Categorie, &t.Poste, &t.Libelle, &t.Tiers, &t.Recurrente)
 	return t, err
 }
 
@@ -366,4 +368,213 @@ func VersCalc(txs []Transaction) []calc.Transaction {
 		res = append(res, calc.Transaction{Type: t.Type, Date: t.Date, Centimes: t.Centimes, Categorie: t.Categorie})
 	}
 	return res
+}
+
+// --- Dépenses récurrentes ---
+
+type Recurrente struct {
+	ID        int64      `json:"id"`
+	Libelle   string     `json:"libelle"`
+	Poste     string     `json:"poste"`
+	Centimes  int64      `json:"centimes"`
+	Frequence string     `json:"frequence"`
+	Debut     time.Time  `json:"-"`
+	Fin       *time.Time `json:"-"`
+}
+
+func (r Recurrente) VersCalc() calc.Recurrente {
+	return calc.Recurrente{Centimes: r.Centimes, Frequence: r.Frequence, Debut: r.Debut, Fin: r.Fin}
+}
+
+const colonnesRec = `id, libelle, poste, centimes, frequence, debut, fin`
+
+func scanRec(row pgx.Row) (*Recurrente, error) {
+	r := &Recurrente{}
+	err := row.Scan(&r.ID, &r.Libelle, &r.Poste, &r.Centimes, &r.Frequence, &r.Debut, &r.Fin)
+	return r, err
+}
+
+func (s *Store) Recurrentes(ctx context.Context, userID int64) ([]Recurrente, error) {
+	rows, err := s.db.Query(ctx, `SELECT `+colonnesRec+` FROM depenses_recurrentes WHERE user_id = $1 ORDER BY libelle, id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	res := []Recurrente{}
+	for rows.Next() {
+		r, err := scanRec(rows)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, *r)
+	}
+	return res, rows.Err()
+}
+
+func (s *Store) CreateRecurrente(ctx context.Context, userID int64, r Recurrente) (*Recurrente, error) {
+	return scanRec(s.db.QueryRow(ctx, `INSERT INTO depenses_recurrentes (user_id, libelle, poste, centimes, frequence, debut, fin)
+		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING `+colonnesRec,
+		userID, r.Libelle, r.Poste, r.Centimes, r.Frequence, r.Debut, r.Fin))
+}
+
+// UpdateRecurrente change une dépense récurrente ; les saisies déjà créées ne bougent pas.
+func (s *Store) UpdateRecurrente(ctx context.Context, userID int64, r Recurrente) (*Recurrente, error) {
+	res, err := scanRec(s.db.QueryRow(ctx, `UPDATE depenses_recurrentes SET libelle = $3, poste = $4, centimes = $5, frequence = $6, debut = $7, fin = $8
+		WHERE id = $1 AND user_id = $2 RETURNING `+colonnesRec,
+		r.ID, userID, r.Libelle, r.Poste, r.Centimes, r.Frequence, r.Debut, r.Fin))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return res, err
+}
+
+// DeleteRecurrente arrête une dépense récurrente ; les saisies déjà créées restent.
+func (s *Store) DeleteRecurrente(ctx context.Context, userID, id int64) error {
+	tag, err := s.db.Exec(ctx, `DELETE FROM depenses_recurrentes WHERE id = $1 AND user_id = $2`, id, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// GenererRecurrentes crée les saisies des dépenses récurrentes jusqu'à la date donnée incluse,
+// pour un compte (userID > 0) ou pour tous (userID = 0). Une date déjà traitée ne l'est plus :
+// une saisie supprimée à la main n'est pas recréée. Renvoie le nombre de saisies créées.
+func (s *Store) GenererRecurrentes(ctx context.Context, userID int64, jusqua time.Time) (int, error) {
+	cree := 0
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT `+colonnesRec+`, user_id, genere_jusqua FROM depenses_recurrentes
+			WHERE ($1 = 0 OR user_id = $1) AND debut <= $2 AND (genere_jusqua IS NULL OR genere_jusqua < $2)
+			FOR UPDATE`, userID, jusqua)
+		if err != nil {
+			return err
+		}
+		type aFaire struct {
+			r      Recurrente
+			uid    int64
+			depuis time.Time
+		}
+		var liste []aFaire
+		for rows.Next() {
+			var a aFaire
+			var genere *time.Time
+			if err := rows.Scan(&a.r.ID, &a.r.Libelle, &a.r.Poste, &a.r.Centimes, &a.r.Frequence, &a.r.Debut, &a.r.Fin, &a.uid, &genere); err != nil {
+				rows.Close()
+				return err
+			}
+			a.depuis = a.r.Debut
+			if genere != nil {
+				a.depuis = genere.AddDate(0, 0, 1)
+			}
+			liste = append(liste, a)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		for _, a := range liste {
+			for _, d := range a.r.VersCalc().Occurrences(a.depuis, jusqua) {
+				if _, err := tx.Exec(ctx, `INSERT INTO transactions (user_id, type, date, centimes, poste, libelle, recurrente_id)
+					VALUES ($1, 'depense', $2, $3, $4, $5, $6)`, a.uid, d, a.r.Centimes, a.r.Poste, a.r.Libelle, a.r.ID); err != nil {
+					return err
+				}
+				cree++
+			}
+			if _, err := tx.Exec(ctx, `UPDATE depenses_recurrentes SET genere_jusqua = $2 WHERE id = $1`, a.r.ID, jusqua); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return cree, err
+}
+
+// --- Trésorerie ---
+
+type Solde struct {
+	Centimes int64     `json:"centimes"`
+	Au       time.Time `json:"-"`
+}
+
+func (s *Store) Solde(ctx context.Context, userID int64) (*Solde, error) {
+	so := &Solde{}
+	err := s.db.QueryRow(ctx, `SELECT centimes, au FROM soldes_tresorerie WHERE user_id = $1`, userID).Scan(&so.Centimes, &so.Au)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return so, err
+}
+
+func (s *Store) SaveSolde(ctx context.Context, userID int64, so *Solde) error {
+	var err error
+	if so == nil {
+		_, err = s.db.Exec(ctx, `DELETE FROM soldes_tresorerie WHERE user_id = $1`, userID)
+	} else {
+		_, err = s.db.Exec(ctx, `INSERT INTO soldes_tresorerie (user_id, centimes, au) VALUES ($1, $2, $3)
+			ON CONFLICT (user_id) DO UPDATE SET centimes = $2, au = $3`, userID, so.Centimes, so.Au)
+	}
+	return err
+}
+
+// --- Stripe ---
+
+type ConnexionStripe struct {
+	Cle       []byte // chiffrée
+	CleFin    string
+	Mode      string
+	CompteID  string
+	CompteNom string
+	Donnees   []byte // JSON de la dernière lecture
+	LuLe      *time.Time
+	Erreur    string
+	Depuis    time.Time
+	// PrevisionMRR : la prévision prend le MRR comme recettes de chaque mois.
+	PrevisionMRR bool
+}
+
+func (s *Store) ConnexionStripe(ctx context.Context, userID int64) (*ConnexionStripe, error) {
+	c := &ConnexionStripe{}
+	err := s.db.QueryRow(ctx, `SELECT cle, cle_fin, mode, compte_id, compte_nom, donnees, lu_le, erreur, created_at, prevision_mrr
+		FROM stripe_connexions WHERE user_id = $1`, userID).
+		Scan(&c.Cle, &c.CleFin, &c.Mode, &c.CompteID, &c.CompteNom, &c.Donnees, &c.LuLe, &c.Erreur, &c.Depuis, &c.PrevisionMRR)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return c, err
+}
+
+func (s *Store) SaveConnexionStripe(ctx context.Context, userID int64, c ConnexionStripe) error {
+	_, err := s.db.Exec(ctx, `INSERT INTO stripe_connexions (user_id, cle, cle_fin, mode, compte_id, compte_nom, donnees, lu_le, erreur)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, '')
+		ON CONFLICT (user_id) DO UPDATE SET cle = $2, cle_fin = $3, mode = $4, compte_id = $5, compte_nom = $6, donnees = $7, lu_le = $8, erreur = '', created_at = now()`,
+		userID, c.Cle, c.CleFin, c.Mode, c.CompteID, c.CompteNom, c.Donnees, c.LuLe)
+	return err
+}
+
+// MajLectureStripe enregistre une nouvelle lecture réussie, ou l'erreur de la dernière tentative.
+func (s *Store) MajLectureStripe(ctx context.Context, userID int64, donnees []byte, erreur string) error {
+	var err error
+	if erreur != "" {
+		_, err = s.db.Exec(ctx, `UPDATE stripe_connexions SET erreur = $2 WHERE user_id = $1`, userID, erreur)
+	} else {
+		_, err = s.db.Exec(ctx, `UPDATE stripe_connexions SET donnees = $2, lu_le = now(), erreur = '' WHERE user_id = $1`, userID, donnees)
+	}
+	return err
+}
+
+// PrevisionStripe choisit si la prévision suit le MRR Stripe ou la moyenne des saisies.
+func (s *Store) PrevisionStripe(ctx context.Context, userID int64, mrr bool) error {
+	tag, err := s.db.Exec(ctx, `UPDATE stripe_connexions SET prevision_mrr = $2 WHERE user_id = $1`, userID, mrr)
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
+}
+
+func (s *Store) DeleteConnexionStripe(ctx context.Context, userID int64) error {
+	_, err := s.db.Exec(ctx, `DELETE FROM stripe_connexions WHERE user_id = $1`, userID)
+	return err
 }
