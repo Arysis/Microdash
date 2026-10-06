@@ -60,7 +60,7 @@ L'API envoie les rappels chaque matin à 8 h (heure de Paris), et au démarrage 
 
 | Dossier | Contenu |
 | --- | --- |
-| `api/` | API Go : comptes, profil, transactions, calculs et agenda (`internal/calc`), rappels par e-mail (`internal/alertes`) |
+| `api/` | API Go : comptes, profil, transactions, calculs et agenda (`internal/calc`), rappels par e-mail (`internal/alertes`), exports CSV et PDF (`internal/exports`, police IBM Plex Sans sous licence OFL) |
 | `api/baremes/` | Taux, plafonds, règles et dates de l'agenda par année (`2026.yaml`) |
 | `web/` | PWA Vue 3 + Vite, servie par Nginx qui relaie `/api` vers l'API |
 | `DESIGN.md` | Couleurs, polices, formes, icônes, mouvement et ton des textes : à suivre pour tout changement d'interface |

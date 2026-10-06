@@ -100,23 +100,6 @@ func dateLongue(t time.Time) string {
 	return fmt.Sprintf("%s %s %s %d", joursFR[t.Weekday()], j, moisFR[t.Month()-1], t.Year())
 }
 
-// Euros formate des centimes à la française : 1 234,56 €.
-func Euros(c int64) string {
-	signe := ""
-	if c < 0 {
-		signe, c = "-", -c
-	}
-	ent := strconv.FormatInt(c/100, 10)
-	var b strings.Builder
-	for i, r := range ent {
-		if i > 0 && (len(ent)-i)%3 == 0 {
-			b.WriteRune(' ')
-		}
-		b.WriteRune(r)
-	}
-	return fmt.Sprintf("%s%s,%02d €", signe, b.String(), c%100)
-}
-
 func dans(jours int) string {
 	switch jours {
 	case 0:
@@ -181,8 +164,8 @@ func corpsEcheance(e calc.Echeance, date time.Time, jours int) string {
 	fmt.Fprintf(&b, "Bonjour,\n\n%s : à faire au plus tard le %s (%s).\n", e.Libelle, dateLongue(date), dans(jours))
 	switch e.Type {
 	case "urssaf":
-		fmt.Fprintf(&b, "\nChiffre d'affaires à déclarer, selon tes saisies : %s\n", Euros(e.CA))
-		fmt.Fprintf(&b, "Cotisations estimées : %s\n", Euros(e.APayer))
+		fmt.Fprintf(&b, "\nChiffre d'affaires à déclarer, selon tes saisies : %s\n", calc.Euros(e.CA))
+		fmt.Fprintf(&b, "Cotisations estimées : %s\n", calc.Euros(e.APayer))
 		if !e.BaremeExact {
 			b.WriteString("Estimation faite avec les taux d'une autre année : vérifie le montant sur le site de l'URSSAF.\n")
 		}
@@ -215,20 +198,20 @@ func Plafonds(d store.Destinataire, r *calc.Resultat) []Alerte {
 		base := fmt.Sprintf("plafond-%d-%s", r.Annee, p.Code)
 		var b strings.Builder
 		b.WriteString("Bonjour,\n\n")
-		fmt.Fprintf(&b, "Selon tes saisies, ton chiffre d'affaires %d atteint %s sur un seuil de %s (%s).\n\n", r.Annee, Euros(p.CA), Euros(p.Plafond), pourcent(p.Ratio))
+		fmt.Fprintf(&b, "Selon tes saisies, ton chiffre d'affaires %d atteint %s sur un seuil de %s (%s).\n\n", r.Annee, calc.Euros(p.CA), calc.Euros(p.Plafond), pourcent(p.Ratio))
 		a := Alerte{Compte: d.ID}
 		switch {
 		case tva && p.Majore > 0 && p.CA > p.Majore:
 			a.Cle, a.Aussi = base+":majore", []string{base + ":80", base + ":100"}
 			a.Sujet = "Seuil majoré de franchise de TVA dépassé"
-			fmt.Fprintf(&b, "Tu as dépassé le seuil majoré de %s : la TVA est due dès le jour du dépassement.\n", Euros(p.Majore))
+			fmt.Fprintf(&b, "Tu as dépassé le seuil majoré de %s : la TVA est due dès le jour du dépassement.\n", calc.Euros(p.Majore))
 		case p.Niveau == "depasse":
 			a.Cle, a.Aussi = base+":100", []string{base + ":80"}
 			if tva {
 				a.Sujet = "Seuil de franchise de TVA dépassé"
 				b.WriteString("Tu as dépassé le seuil de franchise de TVA : tu deviens redevable de la TVA au 1er janvier suivant.")
 				if p.Majore > 0 {
-					fmt.Fprintf(&b, " Au-delà de %s, elle est due dès le jour du dépassement.", Euros(p.Majore))
+					fmt.Fprintf(&b, " Au-delà de %s, elle est due dès le jour du dépassement.", calc.Euros(p.Majore))
 				}
 				b.WriteString("\n")
 			} else {

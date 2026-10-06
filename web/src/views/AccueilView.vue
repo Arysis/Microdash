@@ -31,6 +31,11 @@ const fonctions = [
     texte: "Un agenda de tes déclarations URSSAF, de ta déclaration de revenus et de la CFE, avec le montant à déclarer. Tu coches quand c'est fait.",
   },
   {
+    icone: FileDown,
+    titre: 'Exporter tes chiffres',
+    texte: "Un récapitulatif de l'année en PDF, et toutes tes saisies en CSV pour ton tableur.",
+  },
+  {
     icone: Smartphone,
     titre: "L'avoir sur ton téléphone",
     texte: "Microdash s'ouvre dans ton navigateur et s'ajoute à ton écran d'accueil comme une app.",
@@ -39,7 +44,6 @@ const fonctions = [
 
 const ensuite = [
   { icone: Mail, texte: 'Un rappel par e-mail avant chaque échéance.' },
-  { icone: FileDown, texte: "L'export de tes saisies en CSV et en PDF." },
 ]
 </script>
 

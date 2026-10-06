@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '../api.js'
 import { useRouter } from 'vue-router'
-import { LogOut, Trash2, ChevronRight } from 'lucide-vue-next'
+import { LogOut, Trash2, ChevronRight, FileDown } from 'lucide-vue-next'
 import { session, deconnecter, supprimerCompte } from '../session.js'
 import { demanderConfirmation } from '../confirmation.js'
 
@@ -16,6 +16,8 @@ const rappels = [
   { cle: 'tva', titre: 'Franchise de TVA', aide: "À 80 %, puis si elle est dépassée" },
   { cle: 'cfe', titre: 'CFE', aide: 'Rappel en décembre, à confirmer pour ton cas' },
 ]
+const anneeEnCours = new Date().getFullYear()
+const anneeExport = ref(anneeEnCours)
 const preferences = ref(null)
 const erreurRappels = ref('')
 
@@ -95,6 +97,22 @@ async function supprimer() {
     <p class="aide">Envoyés à {{ session.user?.email }}. Chaque e-mail contient un lien pour te désinscrire.</p>
   </section>
 
+  <section class="carte pile" aria-labelledby="titre-exports">
+    <div class="titre-ligne">
+      <h2 id="titre-exports">Exporter</h2>
+      <select v-model="anneeExport" aria-label="Année à exporter">
+        <option v-for="a in [anneeEnCours, anneeEnCours - 1, anneeEnCours - 2]" :key="a" :value="a">{{ a }}</option>
+      </select>
+    </div>
+    <a class="bouton secondaire" :href="`/api/exports/recapitulatif-${anneeExport}.pdf`" download>
+      <FileDown v-bind="icone" />Récapitulatif {{ anneeExport }} en PDF
+    </a>
+    <a class="bouton secondaire" :href="`/api/exports/saisies-${anneeExport}.csv`" download>
+      <FileDown v-bind="icone" />Saisies {{ anneeExport }} en CSV
+    </a>
+    <p class="aide">Le PDF reprend tes totaux, tes plafonds et toutes tes saisies de l'année. Le CSV s'ouvre dans Excel ou LibreOffice.</p>
+  </section>
+
   <section class="carte pile">
     <button class="bouton secondaire" @click="quitter"><LogOut v-bind="icone" />Se déconnecter</button>
   </section>
@@ -131,7 +149,7 @@ h1 { margin-bottom: var(--e5); }
 .interrupteur span { display: grid; gap: 2px; }
 .interrupteur small { font-weight: 400; }
 .interrupteur input { width: 20px; height: 20px; margin: 0; flex-shrink: 0; accent-color: var(--safran); }
-.rappels .aide:last-child { margin-top: var(--e2); }
+.rappels > .aide { margin-top: var(--e2); }
 .liens-legaux { display: flex; gap: var(--e5); margin-top: var(--e5); }
 .liens-legaux a { color: var(--pierre); }
 </style>
