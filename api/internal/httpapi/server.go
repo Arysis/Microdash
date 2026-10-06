@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -24,6 +25,7 @@ import (
 	"github.com/arysis/microdash/api/internal/alertes"
 	"github.com/arysis/microdash/api/internal/bareme"
 	"github.com/arysis/microdash/api/internal/calc"
+	"github.com/arysis/microdash/api/internal/chiffre"
 	"github.com/arysis/microdash/api/internal/exports"
 	"github.com/arysis/microdash/api/internal/store"
 )
@@ -39,6 +41,9 @@ type Server struct {
 	Baremes      *bareme.Set
 	CookieSecure bool
 	Signature    alertes.Signature // liens de désinscription des e-mails
+	Chiffre      *chiffre.Cle      // chiffre les clés Stripe ; nil : connexion Stripe désactivée
+	StripeURL    string            // vide : API Stripe ; une autre adresse sert aux tests
+	echecsStripe sync.Map          // compte → heure du dernier échec de lecture Stripe
 	now          func() time.Time
 }
 
@@ -79,6 +84,17 @@ func (s *Server) Routes() http.Handler {
 			r.Put("/agenda/{code}", s.putEcheance)
 			r.Get("/alertes/preferences", s.getPreferences)
 			r.Put("/alertes/preferences", s.putPreferences)
+			r.Get("/depenses-recurrentes", s.listRecurrentes)
+			r.Post("/depenses-recurrentes", s.createRecurrente)
+			r.Put("/depenses-recurrentes/{id}", s.updateRecurrente)
+			r.Delete("/depenses-recurrentes/{id}", s.deleteRecurrente)
+			r.Get("/tresorerie", s.getTresorerie)
+			r.Put("/tresorerie/solde", s.putSolde)
+			r.Get("/stripe", s.getStripe)
+			r.Put("/stripe", s.putStripe)
+			r.Delete("/stripe", s.deleteStripe)
+			r.Post("/stripe/actualiser", s.actualiserStripe)
+			r.Put("/stripe/prevision", s.putPrevisionStripe)
 		})
 	})
 	return r

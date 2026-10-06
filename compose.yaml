@@ -32,6 +32,7 @@ services:
       ALERTES_EXPEDITEUR: ${ALERTES_EXPEDITEUR:-}
       ALERTES_LIMITER_A: ${ALERTES_LIMITER_A:-}
       SITE_URL: ${SITE_URL:-}
+      CLE_CHIFFREMENT: ${CLE_CHIFFREMENT:-}
     depends_on:
       db:
         condition: service_healthy

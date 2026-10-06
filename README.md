@@ -56,6 +56,16 @@ Sans `RESEND_API_KEY`, l'app marche normalement et n'envoie aucun e-mail. Pour a
 
 L'API envoie les rappels chaque matin à 8 h (heure de Paris), et au démarrage s'il est plus tard. Chaque e-mail ne part qu'une fois : la table `alertes_envoyees` garde la trace des envois.
 
+## Trésorerie et Stripe
+
+La page Trésorerie montre, mois par mois, l'argent qui entre et qui sort : recettes, dépenses (dont les dépenses récurrentes, saisies automatiquement à leur date) et cotisations URSSAF au mois de leur date limite. Elle prévoit les 6 mois suivants.
+
+Chaque compte peut y connecter son propre compte Stripe pour voir son revenu mensuel récurrent (MRR) et ses encaissements. Aucune clé ne va dans le `.env` : chacun colle sa clé dans l'app, elle est vérifiée auprès de Stripe, chiffrée (AES-256-GCM) avec `CLE_CHIFFREMENT` et liée à son compte. Elle n'est jamais renvoyée au navigateur ; seuls ses 4 derniers caractères sont affichés.
+
+Côté serveur, une seule chose à faire : mettre `CLE_CHIFFREMENT` dans le `.env` (`openssl rand -hex 32`), puis `docker compose up -d`. La garder précieusement : si elle change, les clés enregistrées ne sont plus lisibles et chacun doit recoller la sienne.
+
+Côté utilisateur, il faut une clé restreinte (elle commence par `rk_`) : Stripe › Développeurs › Clés API › Créer une clé restreinte, avec la lecture des abonnements (Subscriptions : Read) et du solde (Balance : Read). Les clés secrètes `sk_` sont refusées, car elles donnent tous les droits sur le compte. Si une permission manque, le message d'erreur de Stripe la nomme.
+
 ## Organisation
 
 | Dossier | Contenu |
