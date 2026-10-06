@@ -23,7 +23,12 @@ const fonctions = [
   {
     icone: Gauge,
     titre: 'Surveiller tes plafonds',
-    texte: 'Une jauge pour le plafond de la micro-entreprise, une pour la franchise de TVA. Elles changent de couleur à 80 %.',
+    texte: "Une jauge pour le plafond de la micro-entreprise, une pour la franchise de TVA. Elles changent de couleur à 80 %, et un message te dit ce qu'implique un dépassement.",
+  },
+  {
+    icone: CalendarClock,
+    titre: 'Ne rater aucune échéance',
+    texte: "Un agenda de tes déclarations URSSAF, de ta déclaration de revenus et de la CFE, avec le montant à déclarer. Tu coches quand c'est fait.",
   },
   {
     icone: Smartphone,
@@ -33,7 +38,6 @@ const fonctions = [
 ]
 
 const ensuite = [
-  { icone: CalendarClock, texte: 'Le calendrier de tes échéances URSSAF et impôts.' },
   { icone: Mail, texte: 'Un rappel par e-mail avant chaque échéance.' },
   { icone: FileDown, texte: "L'export de tes saisies en CSV et en PDF." },
 ]
