@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '../api.js'
 import { formatDate, formatEuros } from '../format.js'
 import { ChevronRight } from 'lucide-vue-next'
-import { dans, joursRestants, jourDuMois, libelleSansAnnee, moisCourt, prochaine } from '../echeances.js'
+import { dans, dateCourte, joursRestants, jourDuMois, libelleCourt, libelleSansAnnee, moisCourt, prochaine } from '../echeances.js'
 
 const maintenant = new Date()
 const annee = ref(maintenant.getFullYear())
@@ -15,6 +15,8 @@ const erreur = ref('')
 const dernieres = ref([])
 const echeance = ref(null)
 const aujourdhuiAgenda = ref('')
+const declarations = ref([])
+const aujourdhuiDeclarations = ref('')
 
 // Prochaine échéance de l'agenda de l'année en cours ; une erreur ici ne bloque pas le tableau de bord.
 async function chargerEcheance() {
@@ -27,8 +29,25 @@ async function chargerEcheance() {
   }
 }
 
+// Déclarations URSSAF dont la période touche l'année affichée, pour la vue Année.
+// Une erreur ici ne bloque pas le tableau de bord : le bloc garde ses totaux, sans le détail.
+async function chargerDeclarations() {
+  const a = annee.value
+  try {
+    const r = await api.get(`/agenda?annee=${a}`)
+    if (a !== annee.value) return
+    aujourdhuiDeclarations.value = r?.aujourdhui || ''
+    declarations.value = (r?.echeances || []).filter(
+      (e) => e.type === 'urssaf' && e.periode_fin >= `${a}-01-01` && e.periode_debut <= `${a}-12-31`,
+    )
+  } catch {
+    if (a === annee.value) declarations.value = []
+  }
+}
+
 async function charger() {
   erreur.value = ''
+  chargerDeclarations()
   try {
     const [d, t] = await Promise.all([
       api.get(`/tableau-de-bord?annee=${annee.value}`),
@@ -96,6 +115,30 @@ const estimationVisible = computed(() => {
   return !t.urssaf_paye || t.cotisations + t.cfp + t.impot_vl > 0
 })
 const suffixeEstime = computed(() => (totaux.value?.urssaf_paye ? ', estimé (pas encore payé)' : ''))
+// Vue Année : l'URSSAF se règle déclaration par déclaration, pas en une fois.
+const urssafAnnee = computed(() => {
+  const t = totaux.value
+  const payees = declarations.value.filter((e) => e.paye > 0).length
+  return {
+    paye: t.urssaf_paye,
+    reste: t.cotisations + t.cfp + t.impot_vl,
+    payees,
+    aVenir: declarations.value.length - payees,
+  }
+})
+const libelleRythme = computed(() => {
+  const n = declarations.value.length
+  const rythme = profil.value?.periodicite === 'mensuelle' ? 'mensuelle' : 'trimestrielle'
+  if (!n) return `Réglé déclaration par déclaration (${rythme}).`
+  return n === 1 ? `Réglé en 1 déclaration ${rythme}.` : `Réglé en ${n} déclarations ${rythme}s.`
+})
+function etatDeclaration(e) {
+  if (e.paye > 0) return 'Payé'
+  if (e.faite) return 'Marquée faite, paiement pas saisi'
+  if (aujourdhuiDeclarations.value && e.date < aujourdhuiDeclarations.value) return `Date limite passée (${dateCourte(e.date, annee.value)}), paiement pas saisi`
+  return `À payer avant le ${dateCourte(e.date, annee.value)}`
+}
+const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`
 const impotLibelle = computed(() => (profil.value?.versement_liberatoire ? 'Impôt (versement libératoire)' : null))
 
 function changerVue(v) {
@@ -145,17 +188,48 @@ function changerVue(v) {
       </div>
       <dl class="chiffres">
         <div><dt>Chiffre d'affaires encaissé</dt><dd><strong>{{ formatEuros(totaux.ca) }}</strong></dd></div>
-        <div v-if="totaux.urssaf_paye > 0">
-          <dt><span class="pastille" style="background: var(--safran)"></span>{{ profil?.versement_liberatoire ? 'URSSAF et impôt payés' : 'URSSAF payé' }}</dt>
-          <dd>− {{ formatEuros(totaux.urssaf_paye) }}</dd>
+        <div v-if="vue === 'annee'" class="bloc-urssaf">
+          <dt>
+            <span class="pastille" style="background: var(--safran)"></span>{{ profil?.versement_liberatoire ? "URSSAF et impôt de l'année" : "URSSAF de l'année" }}
+            <small>{{ libelleRythme }}</small>
+          </dt>
+          <dd>− {{ formatEuros(urssafAnnee.paye + urssafAnnee.reste) }}</dd>
         </div>
-        <template v-if="estimationVisible">
-          <div><dt><span class="pastille" style="background: var(--safran)"></span>Cotisations sociales{{ suffixeEstime }}</dt><dd>− {{ formatEuros(totaux.cotisations) }}</dd></div>
-          <div><dt><span class="pastille" style="background: var(--safran)"></span>Formation professionnelle (CFP){{ suffixeEstime }}</dt><dd>− {{ formatEuros(totaux.cfp) }}</dd></div>
-          <div v-if="impotLibelle"><dt><span class="pastille" style="background: var(--safran)"></span>{{ impotLibelle }}{{ suffixeEstime }}</dt><dd>− {{ formatEuros(totaux.impot_vl) }}</dd></div>
+        <template v-if="vue === 'annee'">
+          <div class="sous-ligne">
+            <dt>Déjà payé<template v-if="urssafAnnee.payees"> ({{ pluriel(urssafAnnee.payees, 'déclaration') }})</template></dt>
+            <dd>{{ formatEuros(urssafAnnee.paye) }}</dd>
+          </div>
+          <div class="sous-ligne">
+            <dt>Reste à payer, estimé<template v-if="urssafAnnee.aVenir"> ({{ pluriel(urssafAnnee.aVenir, 'déclaration') }})</template></dt>
+            <dd>{{ formatEuros(urssafAnnee.reste) }}</dd>
+          </div>
+        </template>
+        <template v-else>
+          <div v-if="totaux.urssaf_paye > 0">
+            <dt><span class="pastille" style="background: var(--safran)"></span>{{ profil?.versement_liberatoire ? 'URSSAF et impôt payés' : 'URSSAF payé' }}</dt>
+            <dd>− {{ formatEuros(totaux.urssaf_paye) }}</dd>
+          </div>
+          <template v-if="estimationVisible">
+            <div><dt><span class="pastille" style="background: var(--safran)"></span>Cotisations sociales{{ suffixeEstime }}</dt><dd>− {{ formatEuros(totaux.cotisations) }}</dd></div>
+            <div><dt><span class="pastille" style="background: var(--safran)"></span>Formation professionnelle (CFP){{ suffixeEstime }}</dt><dd>− {{ formatEuros(totaux.cfp) }}</dd></div>
+            <div v-if="impotLibelle"><dt><span class="pastille" style="background: var(--safran)"></span>{{ impotLibelle }}{{ suffixeEstime }}</dt><dd>− {{ formatEuros(totaux.impot_vl) }}</dd></div>
+          </template>
         </template>
         <div><dt><span class="pastille" style="background: var(--pierre)"></span>Dépenses</dt><dd>− {{ formatEuros(totaux.depenses) }}</dd></div>
       </dl>
+      <details v-if="vue === 'annee' && declarations.length" class="detail-declarations">
+        <summary>Voir le détail par déclaration</summary>
+        <ul>
+          <li v-for="e in declarations" :key="e.code">
+            <div>
+              <strong>{{ libelleCourt(e) }}</strong>
+              <small>{{ etatDeclaration(e) }}</small>
+            </div>
+            <span class="chiffres-tab">{{ e.paye > 0 ? formatEuros(e.paye) : `${formatEuros(e.a_payer)}, estimé` }}</span>
+          </li>
+        </ul>
+      </details>
       <p v-if="vue === 'annee' && !profil?.versement_liberatoire" class="aide">
         Revenu imposable de l'activité en {{ annee }} : <strong>{{ formatEuros(donnees.revenu_imposable) }}</strong>.
         C'est ton chiffre d'affaires après abattement. Il s'ajoute à tes autres revenus dans ta déclaration d'impôt.
@@ -217,6 +291,15 @@ function changerVue(v) {
 .carte-net .repartition { height: 12px; }
 /* Dans la carte du revenu net, les lignes respirent sans séparateur, comme sur la maquette. */
 .carte-net .chiffres div { border-bottom: 0; padding-bottom: 0; }
+.bloc-urssaf dt { flex-wrap: wrap; row-gap: 2px; }
+.bloc-urssaf dt small { flex-basis: 100%; color: var(--pierre); font-size: 13px; font-weight: 400; margin-left: 18px; }
+.sous-ligne { padding-left: 18px; color: var(--pierre); font-size: 14px; }
+.detail-declarations summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+.detail-declarations ul { list-style: none; margin: 0; padding: 0; display: grid; }
+.detail-declarations li { display: flex; justify-content: space-between; align-items: center; gap: var(--e3); padding: var(--e2) 0; border-top: 1px solid var(--lin); }
+.detail-declarations li div { display: grid; gap: 2px; min-width: 0; }
+.detail-declarations li small { color: var(--pierre); font-size: 13px; }
+.detail-declarations li span { white-space: nowrap; font-size: 14px; }
 .alerte-plafond { display: grid; gap: var(--e1); border-radius: var(--rayon); padding: var(--e3) var(--e4); font-size: 15px; background: var(--safran-clair); }
 .alerte-plafond strong { color: var(--safran-fonce); }
 .alerte-plafond.depasse { background: var(--blanc); border: 1px solid var(--lin); border-left: 4px solid var(--brique); }

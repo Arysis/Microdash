@@ -88,6 +88,7 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/depenses-recurrentes", s.createRecurrente)
 			r.Put("/depenses-recurrentes/{id}", s.updateRecurrente)
 			r.Delete("/depenses-recurrentes/{id}", s.deleteRecurrente)
+			r.Post("/depenses-recurrentes/{id}/arreter", s.arreterRecurrente)
 			r.Get("/tresorerie", s.getTresorerie)
 			r.Put("/tresorerie/solde", s.putSolde)
 			r.Get("/stripe", s.getStripe)
