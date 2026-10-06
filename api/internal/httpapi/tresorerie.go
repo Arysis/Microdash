@@ -148,6 +148,23 @@ func (s *Server) deleteRecurrente(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) arreterRecurrente(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r)
+	if !ok {
+		return
+	}
+	err := s.Store.ArreterRecurrente(r.Context(), userID(r.Context()), id, s.aujourdhui())
+	if errors.Is(err, store.ErrNotFound) {
+		erreur(w, http.StatusNotFound, "dépense récurrente introuvable")
+		return
+	}
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // --- Stripe ---
 
 type stripeJSON struct {

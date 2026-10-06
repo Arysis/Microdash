@@ -184,17 +184,18 @@ type Transaction struct {
 	Poste     string    `json:"poste"`
 	Libelle   string    `json:"libelle"`
 	Tiers     string    `json:"tiers"`
-	// Recurrente : saisie créée par une dépense récurrente.
-	Recurrente bool `json:"recurrente"`
+	// Recurrente : saisie créée par une dépense récurrente, RecurrenteID son identifiant.
+	Recurrente   bool  `json:"recurrente"`
+	RecurrenteID int64 `json:"recurrente_id,omitempty"`
 	// Echeance : code de la déclaration URSSAF que paie la dépense (poste URSSAF), vide sinon.
 	Echeance string `json:"echeance"`
 }
 
-const colonnesTx = `id, type, date, centimes, categorie, poste, libelle, tiers, recurrente_id IS NOT NULL, echeance`
+const colonnesTx = `id, type, date, centimes, categorie, poste, libelle, tiers, recurrente_id IS NOT NULL, COALESCE(recurrente_id, 0), echeance`
 
 func scanTx(row pgx.Row) (*Transaction, error) {
 	t := &Transaction{}
-	err := row.Scan(&t.ID, &t.Type, &t.Date, &t.Centimes, &t.Categorie, &t.Poste, &t.Libelle, &t.Tiers, &t.Recurrente, &t.Echeance)
+	err := row.Scan(&t.ID, &t.Type, &t.Date, &t.Centimes, &t.Categorie, &t.Poste, &t.Libelle, &t.Tiers, &t.Recurrente, &t.RecurrenteID, &t.Echeance)
 	return t, err
 }
 
@@ -441,6 +442,21 @@ func (s *Store) DeleteRecurrente(ctx context.Context, userID, id int64) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ArreterRecurrente arrête une dépense récurrente la veille du jour donné : les saisies déjà
+// créées restent. Une dépense qui n'a pas encore commencé est supprimée.
+func (s *Store) ArreterRecurrente(ctx context.Context, userID, id int64, jour time.Time) error {
+	veille := jour.AddDate(0, 0, -1)
+	tag, err := s.db.Exec(ctx, `UPDATE depenses_recurrentes SET fin = LEAST(COALESCE(fin, $3), $3)
+		WHERE id = $1 AND user_id = $2 AND debut <= $3`, id, userID, veille)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() > 0 {
+		return nil
+	}
+	return s.DeleteRecurrente(ctx, userID, id)
 }
 
 // GenererRecurrentes crée les saisies des dépenses récurrentes jusqu'à la date donnée incluse,
