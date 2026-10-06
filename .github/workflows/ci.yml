@@ -44,6 +44,8 @@ jobs:
         with:
           context: ${{ matrix.service }}
           push: true
+          # Variable du dépôt (Settings > Secrets and variables > Actions > Variables), ex. https://www.mondomaine.fr
+          build-args: SITE_URL=${{ vars.SITE_URL }}
           tags: |
             ghcr.io/arysis/microdash-${{ matrix.service }}:${{ github.ref_name }}
             ghcr.io/arysis/microdash-${{ matrix.service }}:latest

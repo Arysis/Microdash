@@ -1,9 +1,12 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { Pencil, Trash2 } from 'lucide-vue-next'
 import { api } from '../api.js'
+import { demanderConfirmation } from '../confirmation.js'
 import { aujourdhui, formatDate, formatEuros, postesDepense, versCentimes } from '../format.js'
 
-const annee = ref(new Date().getFullYear())
+const anneeEnCours = new Date().getFullYear()
+const annee = ref(anneeEnCours)
 const transactions = ref([])
 const profil = ref(null)
 const categories = ref({})
@@ -54,7 +57,7 @@ function editer(t) {
     libelle: t.libelle,
     tiers: t.tiers,
   })
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
 }
 
 async function enregistrer() {
@@ -84,7 +87,12 @@ async function enregistrer() {
 }
 
 async function supprimer(t) {
-  if (!confirm(`Supprimer « ${t.libelle || formatEuros(t.centimes)} » ?`)) return
+  const ok = await demanderConfirmation({
+    titre: 'Supprimer cette saisie ?',
+    message: `${t.libelle || (t.type === 'recette' ? 'Recette' : t.poste)} du ${formatDate(t.date)}, ${formatEuros(t.centimes)}. Elle disparaît de tes calculs.`,
+    action: 'Supprimer',
+  })
+  if (!ok) return
   try {
     await api.del(`/transactions/${t.id}`)
     await charger()
@@ -95,8 +103,12 @@ async function supprimer(t) {
 </script>
 
 <template>
-  <section class="carte">
-    <h1>{{ enEdition ? 'Modifier la saisie' : 'Nouvelle saisie' }}</h1>
+  <div class="bandeau">
+    <h1>Saisies</h1>
+  </div>
+
+  <section class="carte pile">
+    <h2>{{ enEdition ? 'Modifier la saisie' : 'Nouvelle saisie' }}</h2>
     <form @submit.prevent="enregistrer">
       <div class="bascule">
         <button type="button" :class="{ actif: saisie.type === 'recette' }" @click="saisie.type = 'recette'">Recette</button>
@@ -121,21 +133,21 @@ async function supprimer(t) {
       <label>Libellé <input v-model="saisie.libelle" placeholder="Ex. : site vitrine" /></label>
       <label>{{ saisie.type === 'recette' ? 'Client' : 'Fournisseur' }} (facultatif) <input v-model="saisie.tiers" /></label>
       <p v-if="saisie.type === 'depense'" class="aide">
-        En micro-entreprise, les dépenses ne réduisent ni les cotisations ni l'impôt : elles servent à suivre ton revenu net réel.
+        En micro-entreprise, une dépense ne baisse ni tes cotisations ni ton impôt. Elle sert à suivre ton revenu net réel.
       </p>
-      <p v-if="erreur" class="erreur">{{ erreur }}</p>
+      <p v-if="erreur" class="erreur" role="alert">{{ erreur }}</p>
       <div class="ligne">
-        <button class="principal">{{ enEdition ? 'Enregistrer' : 'Ajouter' }}</button>
-        <button v-if="enEdition" type="button" class="secondaire" @click="reinitialiser">Annuler</button>
+        <button class="bouton principal">{{ enEdition ? 'Enregistrer' : 'Ajouter' }}</button>
+        <button v-if="enEdition" type="button" class="bouton secondaire" @click="reinitialiser">Annuler</button>
       </div>
     </form>
   </section>
 
-  <section class="carte">
+  <section class="carte pile">
     <div class="titre-ligne">
       <h2>Saisies {{ annee }}</h2>
-      <select v-model="annee" @change="charger">
-        <option v-for="a in [annee + 1, annee, annee - 1, annee - 2]" :key="a" :value="a">{{ a }}</option>
+      <select v-model="annee" aria-label="Année" @change="charger">
+        <option v-for="a in [anneeEnCours + 1, anneeEnCours, anneeEnCours - 1, anneeEnCours - 2]" :key="a" :value="a">{{ a }}</option>
       </select>
     </div>
     <div class="bascule petite">
@@ -143,7 +155,7 @@ async function supprimer(t) {
       <button :class="{ actif: filtre === 'recette' }" @click="filtre = 'recette'">Recettes</button>
       <button :class="{ actif: filtre === 'depense' }" @click="filtre = 'depense'">Dépenses</button>
     </div>
-    <p v-if="!visibles.length" class="aide">Aucune saisie pour l'instant.</p>
+    <p v-if="!visibles.length" class="aide">Aucune saisie sur cette période. Ajoute ta première recette avec le formulaire ci-dessus.</p>
     <ul class="liste">
       <li v-for="t in visibles" :key="t.id">
         <div>
@@ -152,8 +164,8 @@ async function supprimer(t) {
         </div>
         <span :class="['montant', t.type]">{{ t.type === 'depense' ? '−' : '+' }}{{ formatEuros(t.centimes) }}</span>
         <div class="actions">
-          <button class="lien" @click="editer(t)">Modifier</button>
-          <button class="lien danger" @click="supprimer(t)">Supprimer</button>
+          <button class="lien-bouton" @click="editer(t)"><Pencil :size="18" :stroke-width="1.75" aria-hidden="true" />Modifier</button>
+          <button class="lien-bouton danger" @click="supprimer(t)"><Trash2 :size="18" :stroke-width="1.75" aria-hidden="true" />Supprimer</button>
         </div>
       </li>
     </ul>

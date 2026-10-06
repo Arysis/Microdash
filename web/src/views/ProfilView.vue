@@ -39,7 +39,7 @@ async function enregistrer() {
     await api.put('/profil', { ...profil, categorie_secondaire: mixte.value ? profil.categorie_secondaire : '' })
     const etaitNouveau = premiereFois.value
     session.user.profil_complet = true
-    if (etaitNouveau) router.push('/')
+    if (etaitNouveau) router.push('/tableau-de-bord')
     else message.value = 'Profil enregistré.'
   } catch (e) {
     erreur.value = e.message
@@ -50,10 +50,10 @@ async function enregistrer() {
 </script>
 
 <template>
-  <section class="carte">
-    <h1>{{ premiereFois ? 'Ton activité' : 'Profil' }}</h1>
+  <section class="carte pile">
+    <h1>Ton activité</h1>
     <p v-if="premiereFois" class="aide">
-      Ces informations servent à calculer tes cotisations, ton impôt et tes plafonds.
+      Tes réponses fixent tes taux de cotisation et tes plafonds. Tu pourras les changer plus tard.
     </p>
     <form @submit.prevent="enregistrer">
       <label>
@@ -101,9 +101,9 @@ async function enregistrer() {
         <input v-model="profil.versement_liberatoire" type="checkbox" /> J'ai opté pour le versement libératoire de l'impôt
       </label>
 
-      <p v-if="erreur" class="erreur">{{ erreur }}</p>
+      <p v-if="erreur" class="erreur" role="alert">{{ erreur }}</p>
       <p v-if="message" class="succes">{{ message }}</p>
-      <button class="principal" :disabled="envoi">{{ premiereFois ? 'Continuer' : 'Enregistrer' }}</button>
+      <button class="bouton principal large" :disabled="envoi">{{ premiereFois ? 'Continuer' : 'Enregistrer' }}</button>
     </form>
   </section>
 </template>
