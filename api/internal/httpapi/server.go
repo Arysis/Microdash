@@ -2,12 +2,14 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/mail"
@@ -22,6 +24,7 @@ import (
 	"github.com/arysis/microdash/api/internal/alertes"
 	"github.com/arysis/microdash/api/internal/bareme"
 	"github.com/arysis/microdash/api/internal/calc"
+	"github.com/arysis/microdash/api/internal/exports"
 	"github.com/arysis/microdash/api/internal/store"
 )
 
@@ -71,6 +74,8 @@ func (s *Server) Routes() http.Handler {
 			r.Delete("/transactions/{id}", s.deleteTransaction)
 			r.Get("/tableau-de-bord", s.tableauDeBord)
 			r.Get("/agenda", s.getAgenda)
+			r.Get("/exports/saisies-{annee}.csv", s.exportCSV)
+			r.Get("/exports/recapitulatif-{annee}.pdf", s.exportPDF)
 			r.Put("/agenda/{code}", s.putEcheance)
 			r.Get("/alertes/preferences", s.getPreferences)
 			r.Put("/alertes/preferences", s.putPreferences)
@@ -680,4 +685,82 @@ func (s *Server) desinscription(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// --- Exports ---
+
+func (s *Server) anneeChemin(w http.ResponseWriter, r *http.Request) (int, bool) {
+	a, err := strconv.Atoi(chi.URLParam(r, "annee"))
+	if err != nil || a < 2000 || a > 2100 {
+		erreur(w, http.StatusBadRequest, "année invalide")
+		return 0, false
+	}
+	return a, true
+}
+
+func (s *Server) saisiesAnnee(w http.ResponseWriter, r *http.Request, annee int) ([]store.Transaction, bool) {
+	txs, err := s.Store.Transactions(r.Context(), userID(r.Context()), time.Date(annee, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(annee, 12, 31, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		erreurInterne(w, r, err)
+		return nil, false
+	}
+	return txs, true
+}
+
+func telechargement(w http.ResponseWriter, typ, nom string) {
+	w.Header().Set("Content-Type", typ)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+nom+`"`)
+	w.Header().Set("Cache-Control", "no-store")
+}
+
+func (s *Server) exportCSV(w http.ResponseWriter, r *http.Request) {
+	annee, ok := s.anneeChemin(w, r)
+	if !ok {
+		return
+	}
+	txs, ok := s.saisiesAnnee(w, r, annee)
+	if !ok {
+		return
+	}
+	b, _ := s.Baremes.Pour(annee)
+	telechargement(w, "text/csv; charset=utf-8", fmt.Sprintf("microdash-saisies-%d.csv", annee))
+	if err := exports.CSV(w, txs, b); err != nil {
+		slog.Error("export CSV", "err", err)
+	}
+}
+
+func (s *Server) exportPDF(w http.ResponseWriter, r *http.Request) {
+	annee, ok := s.anneeChemin(w, r)
+	if !ok {
+		return
+	}
+	p, ok := s.profilRequis(w, r)
+	if !ok {
+		return
+	}
+	u, err := s.Store.UserByID(r.Context(), userID(r.Context()))
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	txs, ok := s.saisiesAnnee(w, r, annee)
+	if !ok {
+		return
+	}
+	res, err := calc.Calculer(annee, p.VersCalc(), store.VersCalc(txs), s.Baremes)
+	if err != nil {
+		erreur(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	b, _ := s.Baremes.Pour(annee)
+	var buf bytes.Buffer
+	err = exports.PDF(&buf, exports.Recapitulatif{
+		Email: u.Email, Profil: *p, Resultat: res, Saisies: txs, Bareme: b, EditeLe: alertes.Aujourdhui(s.now()),
+	})
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	telechargement(w, "application/pdf", fmt.Sprintf("microdash-recapitulatif-%d.pdf", annee))
+	_, _ = w.Write(buf.Bytes())
 }

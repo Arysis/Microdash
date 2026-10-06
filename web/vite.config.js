@@ -41,8 +41,9 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
-            // Lecture : réseau d'abord, dernières données en cache hors ligne.
-            urlPattern: ({ url, request }) => url.pathname.startsWith('/api/') && request.method === 'GET',
+            // Lecture : réseau d'abord, dernières données en cache hors ligne. Les exports restent hors cache.
+            urlPattern: ({ url, request }) =>
+              url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/exports/') && request.method === 'GET',
             handler: 'NetworkFirst',
             options: { cacheName: 'api', networkTimeoutSeconds: 5 },
           },
