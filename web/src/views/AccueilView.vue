@@ -1,5 +1,5 @@
 <script setup>
-import { Receipt, Calculator, Wallet, Gauge, Smartphone, CalendarClock, Mail, FileDown, ChartColumn } from 'lucide-vue-next'
+import { Receipt, Calculator, Wallet, Gauge, Smartphone, CalendarClock, Mail, FileDown, ChartColumn, FileText } from 'lucide-vue-next'
 
 const icone = { size: 20, 'stroke-width': 1.75, 'aria-hidden': 'true' }
 
@@ -49,6 +49,7 @@ const fonctions = [
 
 const ensuite = [
   { icone: Mail, texte: 'Un rappel par e-mail avant chaque échéance.' },
+  { icone: FileText, texte: 'Tes factures au format électronique, envoyées via ton compte Qonto, et tes factures fournisseurs reçues au même endroit.' },
 ]
 </script>
 
