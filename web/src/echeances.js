@@ -1,4 +1,6 @@
 // Mise en forme des échéances de l'agenda renvoyées par /api/agenda.
+import { api } from './api.js'
+
 const mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
 const moisCourts = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
 const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi']
@@ -65,3 +67,16 @@ export const prochaine = (echeances, aujourdhui) =>
 
 export const lienDeclaration = (e) =>
   e.type === 'urssaf' ? 'https://www.autoentrepreneur.urssaf.fr' : 'https://www.impots.gouv.fr'
+
+// Déclarations URSSAF qu'un paiement du jour donné peut régler (année du paiement et précédente),
+// la plus récente en premier.
+export async function declarationsURSSAF(date) {
+  const a = Number(String(date).slice(0, 4))
+  if (!a) return []
+  const listes = await Promise.all([a, a - 1].map((x) => api.get(`/agenda?annee=${x}`).catch(() => ({ echeances: [] }))))
+  const vues = new Set()
+  return listes
+    .flatMap((l) => l.echeances)
+    .filter((e) => e.type === 'urssaf' && e.periode_debut <= date && !vues.has(e.code) && vues.add(e.code))
+    .sort((x, y) => (x.periode_fin < y.periode_fin ? 1 : -1))
+}

@@ -22,6 +22,7 @@ const ac = 'À COMPLÉTER'
       <li><strong>Tes rappels par e-mail</strong> : ceux que tu as activés ou coupés, et la liste des rappels déjà envoyés, pour ne jamais t'envoyer deux fois le même.</li>
       <li><strong>Ta trésorerie</strong> : tes dépenses récurrentes et, si tu le notes, le solde de ton compte et sa date.</li>
       <li><strong>Ta connexion Stripe</strong>, si tu l'actives : ta clé restreinte, chiffrée (AES-256-GCM) et jamais réaffichée, l'identifiant et le nom de ton compte Stripe, et les chiffres de la dernière lecture (revenu mensuel récurrent, nombre d'abonnements, encaissements et frais par mois). Aucune donnée sur tes clients n'est gardée.</li>
+      <li><strong>Ta connexion Qonto</strong>, si tu l'actives : ton identifiant et ta clé API, chiffrée (AES-256-GCM) et jamais réaffichée, le nom de ton organisation, le solde de tes comptes et, pour chaque opération lue, sa date, son montant, son libellé et sa référence. Rien n'est jamais écrit dans ton compte Qonto.</li>
     </ul>
     <p>Nous ne demandons ni ton nom, ni ton numéro de téléphone, ni tes coordonnées bancaires.</p>
 
@@ -33,6 +34,7 @@ const ac = 'À COMPLÉTER'
     <ul>
       <li>Ton compte, ton profil, tes saisies, ton agenda, ta trésorerie et tes réglages de rappels : jusqu'à ce que tu supprimes ton compte.</li>
       <li>Ta connexion Stripe : jusqu'à ce que tu la déconnectes ou que tu supprimes ton compte.</li>
+      <li>Ta clé Qonto : jusqu'à ce que tu la déconnectes. Les opérations lues sont gardées, pour ne jamais les réimporter, jusqu'à la suppression de ton compte.</li>
       <li>Ta session de connexion : 30 jours au plus, ou jusqu'à ce que tu te déconnectes.</li>
       <li>Les journaux techniques du serveur (adresse IP, page demandée) : <span class="a-completer">[{{ ac }} : durée]</span>.</li>
     </ul>

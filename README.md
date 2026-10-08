@@ -68,6 +68,19 @@ Côté serveur, une seule chose à faire : mettre `CLE_CHIFFREMENT` dans le `.en
 
 Côté utilisateur, il faut une clé restreinte (elle commence par `rk_`) : Stripe › Développeurs › Clés API › Créer une clé restreinte, avec la lecture des abonnements (Subscriptions : Read) et du solde (Balance : Read). Les clés secrètes `sk_` sont refusées, car elles donnent tous les droits sur le compte. Si une permission manque, le message d'erreur de Stripe la nomme.
 
+## Synchro Qonto
+
+Chaque compte peut aussi connecter son compte Qonto (carte « Qonto » de la page Trésorerie) avec l'identifiant et la clé secrète de Qonto › Paramètres › Intégrations et partenariats › Clé API. La clé est chiffrée comme celle de Stripe, avec la même `CLE_CHIFFREMENT` ; Microdash ne fait que lire (organisation, comptes, opérations).
+
+Chaque synchro lit les opérations réglées depuis le 1er janvier (puis seulement celles modifiées depuis la synchro précédente) et note le solde des comptes comme solde de départ de la prévision. Une opération n'est jamais lue deux fois. Chacune est rangée ainsi :
+
+- virement entre deux comptes de l'organisation : ignoré ;
+- saisie déjà présente, manuelle ou récurrente, du même type et du même montant à 5 jours près : rattachée, rien n'est créé ;
+- libellé pour lequel la personne a demandé de « faire pareil » : saisie créée (ou opération ignorée) comme la fois d'avant ;
+- sinon : liste « À valider » de la page Saisies, où la personne crée la saisie (montant, poste, activité modifiables) ou l'ignore.
+
+Un débit dont le libellé contient « URSSAF » est proposé au poste URSSAF, pour la déclaration de la période précédant le paiement. Une opération ne compte dans les calculs qu'une fois devenue une saisie.
+
 ## Organisation
 
 | Dossier | Contenu |

@@ -41,8 +41,9 @@ type Server struct {
 	Baremes      *bareme.Set
 	CookieSecure bool
 	Signature    alertes.Signature // liens de désinscription des e-mails
-	Chiffre      *chiffre.Cle      // chiffre les clés Stripe ; nil : connexion Stripe désactivée
+	Chiffre      *chiffre.Cle      // chiffre les clés Stripe et Qonto ; nil : connexions désactivées
 	StripeURL    string            // vide : API Stripe ; une autre adresse sert aux tests
+	QontoURL     string            // vide : API Qonto ; une autre adresse sert aux tests
 	echecsStripe sync.Map          // compte → heure du dernier échec de lecture Stripe
 	now          func() time.Time
 }
@@ -96,6 +97,14 @@ func (s *Server) Routes() http.Handler {
 			r.Delete("/stripe", s.deleteStripe)
 			r.Post("/stripe/actualiser", s.actualiserStripe)
 			r.Put("/stripe/prevision", s.putPrevisionStripe)
+			r.Get("/qonto", s.getQonto)
+			r.Put("/qonto", s.putQonto)
+			r.Delete("/qonto", s.deleteQonto)
+			r.Post("/qonto/synchroniser", s.synchroQonto)
+			r.Get("/qonto/operations", s.listOperationsQonto)
+			r.Post("/qonto/operations/{id}/valider", s.validerOperationQonto)
+			r.Post("/qonto/operations/{id}/ignorer", s.ignorerOperationQonto)
+			r.Post("/qonto/operations/{id}/remettre", s.remettreOperationQonto)
 		})
 	})
 	return r

@@ -79,9 +79,10 @@ func run() error {
 			return fmt.Errorf("CLE_CHIFFREMENT : %w", err)
 		}
 	} else {
-		slog.Info("connexion Stripe désactivée : CLE_CHIFFREMENT vide")
+		slog.Info("connexions Stripe et Qonto désactivées : CLE_CHIFFREMENT vide")
 	}
 	api.StripeURL = os.Getenv("STRIPE_API_URL") // tests uniquement : faux serveur Stripe
+	api.QontoURL = os.Getenv("QONTO_API_URL")   // tests uniquement : faux serveur Qonto
 	go genererRecurrentes(ctx, st)
 
 	srv := &http.Server{
