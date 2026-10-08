@@ -86,7 +86,7 @@ async function supprimer() {
   </section>
 
   <section class="carte rappels" aria-labelledby="titre-rappels">
-    <h2 id="titre-rappels">Rappels par e-mail</h2>
+    <h2 id="titre-rappels">Rappels par e-mail <InfoBulle k="rappels" /></h2>
     <template v-if="preferences">
       <label v-for="r in rappels" :key="r.cle" class="interrupteur">
         <span>{{ r.titre }}<small class="aide">{{ r.aide }}</small></span>
@@ -99,7 +99,7 @@ async function supprimer() {
 
   <section class="carte pile" aria-labelledby="titre-exports">
     <div class="titre-ligne">
-      <h2 id="titre-exports">Exporter</h2>
+      <h2 id="titre-exports">Exporter <InfoBulle k="exports" /></h2>
       <select v-model="anneeExport" aria-label="Année à exporter">
         <option v-for="a in [anneeEnCours, anneeEnCours - 1, anneeEnCours - 2]" :key="a" :value="a">{{ a }}</option>
       </select>

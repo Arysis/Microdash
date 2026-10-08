@@ -75,6 +75,13 @@ async function cocher(e, faite) {
     enCours.value = ''
   }
 }
+
+// Explication du bouton « i » de la prochaine échéance, selon son type.
+function cleExplication(e) {
+  if (e.type === 'cfe') return 'cfe'
+  if (e.type === 'revenus') return 'declarationRevenus'
+  return e.libelle.startsWith('Première') ? 'premiereDeclaration' : 'dateLimite'
+}
 </script>
 
 <template>
@@ -93,13 +100,13 @@ async function cocher(e, faite) {
     <div class="entete-echeance">
       <span class="tuile" aria-hidden="true"><span>{{ moisCourt(suivante.date) }}</span><strong>{{ jourDuMois(suivante.date) }}</strong></span>
       <div>
-        <h2 id="titre-prochaine">{{ libelleSansAnnee(suivante) }}</h2>
+        <h2 id="titre-prochaine">{{ libelleSansAnnee(suivante) }} <InfoBulle :key="suivante.code" :k="cleExplication(suivante)" /></h2>
         <span class="aide">{{ sousTitre(suivante) }}</span>
       </div>
     </div>
     <dl v-if="suivante.type === 'urssaf'" class="montants">
       <div><dt>Chiffre d'affaires à déclarer</dt><dd><strong>{{ formatEuros(suivante.ca) }}</strong></dd></div>
-      <div><dt>Cotisations estimées</dt><dd>{{ formatEuros(suivante.a_payer) }}</dd></div>
+      <div><dt>Cotisations estimées <InfoBulle k="cotisationsEstimees" /></dt><dd>{{ formatEuros(suivante.a_payer) }}</dd></div>
     </dl>
     <p v-if="suivante.note" class="aide">{{ suivante.note }}</p>
     <p v-if="suivante.type === 'urssaf' && !suivante.bareme_exact" class="aide">Estimation faite avec les taux d'une autre année.</p>
@@ -111,11 +118,12 @@ async function cocher(e, faite) {
         <input type="checkbox" :checked="suivante.faite" :disabled="enCours === suivante.code || suivante.paye > 0" @change="cocher(suivante, $event.target.checked)" />
         C'est fait
       </label>
+      <InfoBulle k="caseFaite" />
     </div>
   </section>
 
   <section class="carte">
-    <h2>Toutes les échéances {{ annee }}</h2>
+    <h2>Toutes les échéances {{ annee }} <InfoBulle k="dateLimite" /></h2>
     <p v-if="erreur" class="erreur" role="alert">{{ erreur }}</p>
     <p v-else-if="donnees && !echeances.length" class="aide vide">Aucune échéance cette année-là : ton activité n'avait pas commencé.</p>
     <ul class="echeances">

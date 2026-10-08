@@ -252,7 +252,7 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
           <small :class="tr.flux_prevu < 0 ? 'baisse' : 'hausse'">{{ signe(tr.flux_prevu) }} sur les 6 prochains mois</small>
         </template>
         <template v-else>
-          <span id="titre-prevision">Prévu sur les 6 prochains mois</span>
+          <span id="titre-prevision">Prévu sur les 6 prochains mois <InfoBulle k="prevision" /></span>
           <strong class="chiffres-tab">{{ signe(tr.flux_prevu) }}</strong>
           <small class="neutre">Entrées moins sorties, cotisations comprises.</small>
         </template>
@@ -267,7 +267,7 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
       </div>
       <form v-else class="form-solde" @submit.prevent="enregistrerSolde()">
         <div class="ligne">
-          <label>Solde du compte (€) <input v-model="solde.montant" inputmode="decimal" placeholder="0,00" required /></label>
+          <label><span>Solde du compte (€) <InfoBulle k="solde" /></span> <input v-model="solde.montant" inputmode="decimal" placeholder="0,00" required /></label>
           <label>Au <input v-model="solde.au" type="date" :max="aujourdhui()" required /></label>
         </div>
         <p class="aide">Microdash y ajoute ce que tu saisis après cette date, puis les entrées et sorties de chaque mois.</p>
@@ -279,14 +279,17 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
         </div>
       </form>
 
+      <div class="choix-vue">
       <div class="bascule" role="group" aria-label="Vue du graphe">
         <button type="button" :class="{ actif: vueGraphe === 'mois' }" :aria-pressed="vueGraphe === 'mois'" @click="choisirVue('mois')">Par mois</button>
         <button type="button" :class="{ actif: vueGraphe === 'cumul' }" :aria-pressed="vueGraphe === 'cumul'" @click="choisirVue('cumul')">Cumulée</button>
       </div>
+      <InfoBulle k="vueGraphe" />
+      </div>
       <GrapheTresorerie :mois="mois" :vue="vueGraphe" />
 
       <div v-if="stripe?.connecte && stripe.mrr" class="source">
-        <span id="titre-source">Recettes prévues</span>
+        <span id="titre-source">Recettes prévues <InfoBulle k="sourcePrevision" /></span>
         <div class="bascule" role="group" aria-labelledby="titre-source">
           <button type="button" :class="{ actif: stripe.prevision_mrr }" :aria-pressed="stripe.prevision_mrr" @click="choisirSource(true)">
             MRR Stripe · {{ formatEuros(stripe.mrr.par_devise.eur || 0) }}
@@ -324,7 +327,7 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
       </ol>
       <form @submit.prevent="connecterStripe">
         <label>
-          Clé restreinte
+          <span>Clé restreinte <InfoBulle k="cleStripe" /></span>
           <input v-model="cleStripe" type="password" autocomplete="off" spellcheck="false" placeholder="rk_live_…" required />
         </label>
         <p class="aide">Ta clé est chiffrée et liée à ton compte Microdash. Elle ne lit rien d'autre et ne peut rien modifier ; tu peux la supprimer dans Stripe à tout moment.</p>
@@ -384,7 +387,7 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
   </section>
 
   <section v-if="donnees" class="carte pile" aria-labelledby="titre-recurrentes">
-    <h2 id="titre-recurrentes">Dépenses récurrentes</h2>
+    <h2 id="titre-recurrentes">Dépenses récurrentes <InfoBulle k="recurrentes" /></h2>
     <p class="aide">Tes abonnements et frais fixes. Microdash les ajoute à tes saisies à chaque échéance et les compte dans la prévision.</p>
     <ul v-if="recurrentes.length" class="liste">
       <li v-for="r in recurrentes" :key="r.id">
@@ -435,6 +438,8 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
 </template>
 
 <style scoped>
+.choix-vue { display: flex; align-items: center; gap: var(--e3); }
+.choix-vue .bascule { flex: 1; }
 .bandeau p { color: var(--blanc); font-size: 15px; }
 .hero, .mrr { display: grid; gap: var(--e1); }
 .hero span, .mrr span { color: var(--pierre); font-size: 14px; font-weight: 500; }
