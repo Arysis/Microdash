@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Pencil, Repeat, Trash2 } from 'lucide-vue-next'
 import { api } from '../api.js'
 import { demanderConfirmation } from '../confirmation.js'
+import { declarationsURSSAF } from '../echeances.js'
+import OperationsQonto from '../components/OperationsQonto.vue'
 import { aujourdhui, formatDate, formatEuros, posteURSSAF, postesDepense, versCentimes } from '../format.js'
 
 const anneeEnCours = new Date().getFullYear()
@@ -43,17 +45,9 @@ async function chargerRecurrentes() {
 const declarations = ref([])
 const estURSSAF = computed(() => saisie.type === 'depense' && saisie.poste === posteURSSAF)
 
-// Déclarations URSSAF de l'année du paiement et de la précédente, la plus récente en premier.
 async function chargerDeclarations() {
-  const a = Number(saisie.date.slice(0, 4))
-  if (!a) return
   try {
-    const listes = await Promise.all([a, a - 1].map((x) => api.get(`/agenda?annee=${x}`).catch(() => ({ echeances: [] }))))
-    const vues = new Set()
-    declarations.value = listes
-      .flatMap((l) => l.echeances)
-      .filter((e) => e.type === 'urssaf' && e.periode_debut <= saisie.date && !vues.has(e.code) && vues.add(e.code))
-      .sort((x, y) => (x.periode_fin < y.periode_fin ? 1 : -1))
+    declarations.value = await declarationsURSSAF(saisie.date)
   } catch {
     declarations.value = []
   }
@@ -195,6 +189,8 @@ async function supprimer(t) {
   <div class="bandeau">
     <h1>Saisies</h1>
   </div>
+
+  <OperationsQonto :categories-profil="categoriesProfil" :categories="categories" @saisie="charger" />
 
   <section class="carte pile">
     <h2>{{ enEdition ? 'Modifier la saisie' : 'Nouvelle saisie' }} <InfoBulle k="recetteDepense" /></h2>

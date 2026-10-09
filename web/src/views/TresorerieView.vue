@@ -157,6 +157,62 @@ async function deconnecterStripe() {
   }
 }
 
+// --- Qonto ---
+const qonto = ref(null)
+const qontoForm = reactive({ identifiant: '', cle: '' })
+const qontoErreur = ref('')
+const qontoMessage = ref('')
+const qontoAction = ref('')
+async function chargerQonto() {
+  try {
+    qonto.value = await api.get('/qonto')
+  } catch {
+    qonto.value = null
+  }
+}
+onMounted(chargerQonto)
+const synchroQonto = computed(() => {
+  const v = qonto.value?.synchro_le
+  if (!v) return ''
+  const d = new Date(v)
+  return `${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+})
+function resumeQonto(b) {
+  if (!b.nouvelles) return 'Aucune nouvelle opération.'
+  const n = b.a_valider
+  return `${b.nouvelles} nouvelle${b.nouvelles > 1 ? 's' : ''} opération${b.nouvelles > 1 ? 's' : ''}` +
+    (n ? `, dont ${n} à valider dans Saisies.` : ', toutes rangées.')
+}
+async function actionQonto(action, appel) {
+  qontoErreur.value = ''
+  qontoMessage.value = ''
+  qontoAction.value = action
+  try {
+    const r = await appel()
+    if (r?.bilan) qontoMessage.value = resumeQonto(r.bilan)
+  } catch (e) {
+    qontoErreur.value = e.message
+  } finally {
+    qontoAction.value = ''
+    await Promise.all([chargerQonto(), charger()])
+  }
+}
+async function connecterQonto() {
+  await actionQonto('connexion', () =>
+    api.put('/qonto', { identifiant: qontoForm.identifiant.trim(), cle: qontoForm.cle.trim() }),
+  )
+  if (qonto.value?.connecte) Object.assign(qontoForm, { identifiant: '', cle: '' })
+}
+const synchroniserQonto = () => actionQonto('synchro', () => api.post('/qonto/synchroniser'))
+async function deconnecterQonto() {
+  const ok = await demanderConfirmation({
+    titre: 'Déconnecter Qonto ?',
+    message: "Microdash efface ta clé. Les saisies déjà créées restent. Pense aussi à supprimer la clé dans Qonto si tu ne t'en sers plus.",
+    action: 'Déconnecter',
+  })
+  if (ok) await actionQonto('deconnexion', () => api.del('/qonto'))
+}
+
 // --- Dépenses récurrentes ---
 // Un paiement URSSAF varie et se rattache à une déclaration : il se saisit à la main.
 const postesRecurrents = postesDepense.filter((p) => p !== posteURSSAF)
@@ -259,7 +315,10 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
       </div>
 
       <div v-if="!solde.ouvert" class="ligne-solde">
-        <span v-if="donnees.solde" class="aide">
+        <span v-if="donnees.solde && qonto?.connecte" class="aide">
+          Solde de tes comptes Qonto le {{ formatDate(donnees.solde.au) }} : {{ formatEuros(donnees.solde.centimes) }}. Mis à jour à chaque synchro.
+        </span>
+        <span v-else-if="donnees.solde" class="aide">
           Solde du compte noté le {{ formatDate(donnees.solde.au) }} : {{ formatEuros(donnees.solde.centimes) }}.
         </span>
         <span v-else class="aide">Note le solde de ton compte pro pour voir ce qu'il restera chaque mois.</span>
@@ -382,6 +441,60 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
           <RefreshCw :size="18" :stroke-width="1.75" aria-hidden="true" />{{ stripeAction === 'actualiser' ? 'Lecture…' : 'Actualiser' }}
         </button>
         <button class="lien-bouton danger" @click="deconnecterStripe">Déconnecter</button>
+      </div>
+    </template>
+  </section>
+
+  <section v-if="qonto" class="carte pile" aria-labelledby="titre-qonto">
+    <h2 id="titre-qonto">Qonto</h2>
+
+    <p v-if="!qonto.disponible" class="aide">
+      La connexion Qonto n'est pas encore activée sur ce serveur. La personne qui l'héberge doit renseigner CLE_CHIFFREMENT.
+    </p>
+
+    <template v-else-if="!qonto.connecte">
+      <p>Connecte ton compte Qonto : Microdash lit tes opérations et te propose d'en faire des saisies, sans doublon avec celles que tu as déjà.</p>
+      <ol class="etapes">
+        <li>Dans Qonto, ouvre <strong>Paramètres › Intégrations et partenariats › Clé API</strong>.</li>
+        <li>Copie l'<strong>identifiant</strong> et la <strong>clé secrète</strong>, et colle-les ici.</li>
+      </ol>
+      <form @submit.prevent="connecterQonto">
+        <label>
+          Identifiant
+          <input v-model="qontoForm.identifiant" autocomplete="off" spellcheck="false" placeholder="mon-entreprise-1234" required />
+        </label>
+        <label>
+          Clé secrète
+          <input v-model="qontoForm.cle" type="password" autocomplete="off" spellcheck="false" required />
+        </label>
+        <p class="aide">La clé est chiffrée et liée à ton compte Microdash. Microdash ne fait que lire : il ne peut ni payer ni virer. Tu peux la supprimer dans Qonto à tout moment.</p>
+        <p v-if="qontoErreur" class="erreur" role="alert">{{ qontoErreur }}</p>
+        <button class="bouton principal" :disabled="qontoAction === 'connexion'">
+          {{ qontoAction === 'connexion' ? 'Connexion et première synchro…' : 'Connecter Qonto' }}
+        </button>
+      </form>
+    </template>
+
+    <template v-else>
+      <p class="aide">
+        {{ qonto.organisation || qonto.identifiant }} · clé …{{ qonto.cle_fin }} · connecté le {{ formatDate(qonto.depuis) }}
+      </p>
+      <p v-if="qonto.erreur" class="erreur" role="alert">Dernière synchro impossible : {{ qonto.erreur }}</p>
+      <p v-if="qontoMessage" class="succes" role="status">{{ qontoMessage }}</p>
+      <p v-if="qontoErreur" class="erreur" role="alert">{{ qontoErreur }}</p>
+      <p v-if="qonto.a_valider" class="aide">
+        <RouterLink to="/saisies">{{ qonto.a_valider }} opération{{ qonto.a_valider > 1 ? 's' : '' }} à valider</RouterLink> dans Saisies.
+      </p>
+      <p class="aide">
+        Chaque synchro lit les opérations réglées depuis le 1er janvier. Une opération déjà saisie à la main (même montant, à 5 jours près) y est rattachée ;
+        un paiement URSSAF est proposé pour la déclaration du mois précédent ; les virements entre tes comptes sont ignorés.
+      </p>
+      <div class="actions-stripe">
+        <span v-if="synchroQonto" class="aide">Synchronisé le {{ synchroQonto }}</span>
+        <button class="lien-bouton" :disabled="qontoAction === 'synchro'" @click="synchroniserQonto">
+          <RefreshCw :size="18" :stroke-width="1.75" aria-hidden="true" />{{ qontoAction === 'synchro' ? 'Synchronisation…' : 'Synchroniser' }}
+        </button>
+        <button class="lien-bouton danger" @click="deconnecterQonto">Déconnecter</button>
       </div>
     </template>
   </section>
