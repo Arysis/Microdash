@@ -28,12 +28,12 @@ const (
 	PrevisionMoyenne = "moyenne" // moyenne des 3 derniers mois complets
 )
 
-// MouvementBanque est une opération lue sur le compte bancaire : l'argent réellement entré ou sorti.
+// MouvementBanque est une opération du compte bancaire pas encore rangée en saisie.
 type MouvementBanque struct {
-	Date       time.Time
-	Centimes   int64
-	Recette    bool
-	Cotisation bool // paiement à l'URSSAF
+	Date     time.Time
+	Centimes int64
+	Recette  bool
+	Echeance string // déclaration URSSAF que paie ce débit, sinon vide
 }
 
 type EntreeTresorerie struct {
@@ -42,11 +42,12 @@ type EntreeTresorerie struct {
 	Saisies     []Transaction // au moins les 12 mois passés
 	Echeances   []Echeance    // agendas couvrant la période et la prévision
 	Recurrentes []Recurrente
-	// Banque : opérations du compte à partir de BanqueDepuis (zéro : pas de compte connecté).
-	// Sur cette période, le réel vient du compte et non des saisies : une saisie payée
-	// ailleurs ne fausse plus le solde, une opération pas encore validée compte déjà.
-	Banque       []MouvementBanque
+	// Compte connecté : SoldeDepart est son solde réel le jour BanqueDepuis, tiré de ses seules
+	// opérations. Le solde avance ensuite au fil des saisies (y compris celles payées ailleurs)
+	// et des opérations Banque pas encore validées ; Solde n'est alors plus utilisé.
+	SoldeDepart  *int64
 	BanqueDepuis time.Time
+	Banque       []MouvementBanque
 	MRR          *int64 // en euros ; nil sans Stripe
 	Solde        *int64 // solde du compte noté le jour SoldeAu
 	SoldeAu      time.Time
@@ -113,7 +114,6 @@ func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error
 		}
 	}
 
-	viaBanque := func(d time.Time) bool { return !e.BanqueDepuis.IsZero() && !d.Before(e.BanqueDepuis) }
 	reel := func(d time.Time, centimes int64, recette, cotisation bool) {
 		mt := idx[cleMois(d)]
 		if mt == nil || mt.Prevision {
@@ -133,8 +133,7 @@ func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error
 		}
 	}
 
-	// Réel : saisies jusqu'à aujourd'hui, ou opérations du compte sur la période qu'il couvre.
-	// Les recettes saisies servent toujours à la prévision.
+	// Réel : saisies jusqu'à aujourd'hui, et opérations du compte pas encore validées.
 	recettesParMois := map[string]int64{}
 	for _, t := range e.Saisies {
 		if t.Date.After(auj) {
@@ -143,13 +142,13 @@ func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error
 		if t.Type == Recette {
 			recettesParMois[cleMois(t.Date)] += t.Centimes
 		}
-		if !viaBanque(t.Date) {
-			reel(t.Date, t.Centimes, t.Type == Recette, t.Echeance != "")
-		}
+		reel(t.Date, t.Centimes, t.Type == Recette, t.Echeance != "")
 	}
+	enAttente := map[string]bool{} // déclarations payées par une opération pas encore validée
 	for _, m := range e.Banque {
-		if viaBanque(m.Date) && !m.Date.After(auj) {
-			reel(m.Date, m.Centimes, m.Recette, m.Cotisation)
+		if !m.Date.After(auj) {
+			reel(m.Date, m.Centimes, m.Recette, m.Echeance != "")
+			enAttente[m.Echeance] = true
 		}
 	}
 
@@ -216,8 +215,8 @@ func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error
 			return nil, err
 		}
 		mt := idx[cleMois(d)]
-		// Une date limite passée sur la période du compte : ce qui a été payé y figure déjà.
-		if mt == nil || (viaBanque(d) && !d.After(auj)) {
+		// Paiement déjà sur le compte, pas encore validé : il remplace l'estimation.
+		if mt == nil || enAttente[ec.Code] {
 			continue
 		}
 		montant := ec.APayer
@@ -241,8 +240,17 @@ func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error
 	if t, err := tauxDe(courant.AddDate(0, 1, 0)); err == nil {
 		res.TauxCharges = t
 	}
+	if e.SoldeDepart != nil {
+		// Le solde part du compte au début de BanqueDepuis et avance au fil des mois.
+		moisSolde = cleMois(e.BanqueDepuis.AddDate(0, -1, 0))
+		apresSolde = 0
+	}
 	var solde *int64
-	if e.Solde != nil {
+	switch {
+	case e.SoldeDepart != nil:
+		v := *e.SoldeDepart
+		solde = &v
+	case e.Solde != nil:
 		v := *e.Solde
 		solde = &v
 	}
@@ -257,6 +265,9 @@ func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error
 		// Fin du mois du solde : le solde noté plus ce qui arrive après ; ensuite, chaque mois ajoute son flux.
 		if mt.Mois == moisSolde {
 			*solde += apresSolde
+			if e.SoldeDepart != nil {
+				continue // le mois d'avant le départ : son solde se déduit en remontant
+			}
 		} else {
 			*solde += mt.Flux
 		}

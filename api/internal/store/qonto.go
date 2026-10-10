@@ -347,29 +347,37 @@ func (s *Store) RemettreOperationQonto(ctx context.Context, userID, id int64) er
 	})
 }
 
-// MouvementsQonto renvoie l'argent réellement entré et sorti du compte Qonto, quel que soit le
-// statut des opérations, hors virements entre comptes de la personne, et le 1er janvier de la
-// première année lue : les synchros lisent depuis le 1er janvier. Zéro sans opération.
-func (s *Store) MouvementsQonto(ctx context.Context, userID int64) ([]calc.MouvementBanque, time.Time, error) {
-	var depuis *time.Time
-	if err := s.db.QueryRow(ctx, `SELECT min(date) FROM qonto_operations WHERE user_id = $1`, userID).Scan(&depuis); err != nil || depuis == nil {
-		return nil, time.Time{}, err
+// TresorerieQonto prépare la trésorerie d'un compte Qonto connecté. depuis : le 1er du premier mois
+// affiché, ramené au plus tôt au 1er janvier de la première année lue (les synchros lisent depuis
+// le 1er janvier). net : ce qui est entré moins ce qui est sorti du compte de depuis à soldeAu,
+// toutes opérations comprises, pour retrouver le solde réel ce jour-là. attente : les opérations
+// pas encore validées, qui comptent déjà. depuis est zéro sans opération.
+func (s *Store) TresorerieQonto(ctx context.Context, userID int64, premier, soldeAu time.Time) (depuis time.Time, net int64, attente []calc.MouvementBanque, err error) {
+	var min *time.Time
+	if err = s.db.QueryRow(ctx, `SELECT min(date) FROM qonto_operations WHERE user_id = $1`, userID).Scan(&min); err != nil || min == nil {
+		return
 	}
-	rows, err := s.db.Query(ctx, `SELECT q.date, q.centimes, q.type = 'recette',
-			CASE WHEN t.id IS NOT NULL THEN t.echeance <> '' ELSE q.poste_propose = $2 END
-		FROM qonto_operations q LEFT JOIN transactions t ON t.id = q.transaction_id
-		WHERE q.user_id = $1 AND q.motif <> 'interne' ORDER BY q.date`, userID, calc.PosteURSSAF)
+	depuis = time.Date(min.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+	if premier.After(depuis) {
+		depuis = premier
+	}
+	if err = s.db.QueryRow(ctx, `SELECT coalesce(sum(CASE WHEN type = 'recette' THEN centimes ELSE -centimes END), 0)
+		FROM qonto_operations WHERE user_id = $1 AND date >= $2 AND date <= $3`, userID, depuis, soldeAu).Scan(&net); err != nil {
+		return
+	}
+	rows, err := s.db.Query(ctx, `SELECT date, centimes, type = 'recette', CASE WHEN poste_propose = $2 THEN echeance_proposee ELSE '' END
+		FROM qonto_operations WHERE user_id = $1 AND statut = 'a_valider' ORDER BY date`, userID, calc.PosteURSSAF)
 	if err != nil {
-		return nil, time.Time{}, err
+		return
 	}
 	defer rows.Close()
-	var res []calc.MouvementBanque
 	for rows.Next() {
 		var m calc.MouvementBanque
-		if err := rows.Scan(&m.Date, &m.Centimes, &m.Recette, &m.Cotisation); err != nil {
-			return nil, time.Time{}, err
+		if err = rows.Scan(&m.Date, &m.Centimes, &m.Recette, &m.Echeance); err != nil {
+			return
 		}
-		res = append(res, m)
+		attente = append(attente, m)
 	}
-	return res, time.Date(depuis.Year(), 1, 1, 0, 0, 0, 0, time.UTC), rows.Err()
+	err = rows.Err()
+	return
 }

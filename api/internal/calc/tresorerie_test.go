@@ -149,41 +149,45 @@ func TestTresorerieSoldeAvant(t *testing.T) {
 	}
 }
 
-// Avec un compte connecté, le réel vient de ses opérations : une saisie payée ailleurs ne compte
-// pas, une opération ignorée ou pas encore validée compte, et le solde de départ tombe juste.
+// Avec un compte connecté, le solde part du solde réel du compte puis suit toutes les saisies
+// (même payées ailleurs) et les opérations pas encore validées ; une opération ignorée ne compte pas.
 func TestTresorerieBanque(t *testing.T) {
 	set := charger(t)
-	solde := int64(12793) // somme des opérations ci-dessous
+	depart, solde := int64(0), int64(999999) // le solde noté n'est plus utilisé
 	e := EntreeTresorerie{
-		Aujourdhui: jour("2026-10-09"), MoisPasses: 9, MoisFuturs: 0, Solde: &solde, SoldeAu: jour("2026-10-09"),
-		Profil: Profil{Categorie: "vente_bic", NatureCFP: "commercant", DebutActivite: jour("2026-01-01")},
+		Aujourdhui: jour("2026-10-09"), MoisPasses: 11, MoisFuturs: 0, Solde: &solde, SoldeAu: jour("2026-10-09"),
+		Profil:      Profil{Categorie: "vente_bic", NatureCFP: "commercant", DebutActivite: jour("2026-01-01")},
+		SoldeDepart: &depart, BanqueDepuis: jour("2026-01-01"),
 		Saisies: []Transaction{
-			{Type: Depense, Date: jour("2026-03-05"), Centimes: 2160}, // payée hors du compte
+			{Type: Depense, Date: jour("2026-03-05"), Centimes: 2160}, // payée avec une autre carte
 			{Type: Recette, Date: jour("2026-06-06"), Centimes: 10000},
 			{Type: Depense, Date: jour("2026-07-02"), Centimes: 2800, Echeance: "urssaf-2026-06"},
-			{Type: Recette, Date: jour("2026-09-30"), Centimes: 2000}, // brut ; 18,28 € reçus
 		},
 		Banque: []MouvementBanque{
-			{Date: jour("2026-05-20"), Centimes: 5000, Recette: true}, // apport ignoré
-			{Date: jour("2026-06-06"), Centimes: 10000, Recette: true},
-			{Date: jour("2026-07-02"), Centimes: 2800, Cotisation: true},
-			{Date: jour("2026-08-01"), Centimes: 1235},
-			{Date: jour("2026-09-30"), Centimes: 1828, Recette: true},
+			{Date: jour("2026-08-01"), Centimes: 1235},                            // à valider
+			{Date: jour("2026-10-02"), Centimes: 300, Echeance: "urssaf-2026-09"}, // URSSAF à valider
 		},
-		BanqueDepuis: jour("2026-01-01"),
 	}
 	tr, err := CalculerTresorerie(e, set)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m := tr.Mois[0]; m.Mois != "2026-01" || m.SoldeFin == nil || *m.SoldeFin != 0 {
-		t.Errorf("fin janvier : %v, attendu 0", *m.SoldeFin)
+	fin := func(mois string) int64 {
+		for _, m := range tr.Mois {
+			if m.Mois == mois && m.SoldeFin != nil {
+				return *m.SoldeFin
+			}
+		}
+		t.Fatalf("%s : pas de solde", mois)
+		return 0
 	}
-	mars, juillet := tr.Mois[2], tr.Mois[6]
-	if mars.Depenses != 0 {
-		t.Errorf("mars : dépense payée ailleurs comptée (%d)", mars.Depenses)
+	attendus := map[string]int64{"2025-12": 0, "2026-02": 0, "2026-03": -2160, "2026-06": 7840, "2026-07": 5040, "2026-08": 3805}
+	for m, a := range attendus {
+		if v := fin(m); v != a {
+			t.Errorf("fin %s : %d, attendu %d", m, v, a)
+		}
 	}
-	if juillet.Cotisations != 2800 {
-		t.Errorf("juillet : cotisations %d, attendu 2800", juillet.Cotisations)
+	if oct := tr.Mois[len(tr.Mois)-1]; oct.Cotisations != 300 {
+		t.Errorf("octobre : cotisations %d, attendu 300 (paiement à valider, sans l'estimation en plus)", oct.Cotisations)
 	}
 }

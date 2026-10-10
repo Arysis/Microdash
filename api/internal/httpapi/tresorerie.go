@@ -438,17 +438,24 @@ func (s *Server) getTresorerie(w http.ResponseWriter, r *http.Request) {
 		v := lecture.MRR.ParDevise["eur"]
 		e.MRR = &v
 	}
-	// Compte Qonto connecté : son solde est noté à chaque synchro, le réel vient donc de ses opérations.
-	if s.Chiffre != nil {
+	// Compte Qonto connecté : le solde part du solde réel du compte au premier mois affiché, puis
+	// suit les saisies (même payées ailleurs) et les opérations pas encore validées.
+	if s.Chiffre != nil && solde != nil {
 		c, err := s.Store.ConnexionQonto(ctx, uid)
 		if err != nil {
 			erreurInterne(w, r, err)
 			return
 		}
 		if c != nil {
-			if e.Banque, e.BanqueDepuis, err = s.Store.MouvementsQonto(ctx, uid); err != nil {
+			premier := time.Date(auj.Year(), auj.Month()-passes, 1, 0, 0, 0, 0, time.UTC)
+			depuis, net, attente, err := s.Store.TresorerieQonto(ctx, uid, premier, solde.Au)
+			if err != nil {
 				erreurInterne(w, r, err)
 				return
+			}
+			if !depuis.IsZero() {
+				depart := solde.Centimes - net
+				e.SoldeDepart, e.BanqueDepuis, e.Banque = &depart, depuis, attente
 			}
 		}
 	}
