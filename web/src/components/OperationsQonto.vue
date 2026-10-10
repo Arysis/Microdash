@@ -185,7 +185,7 @@ const signe = (o) => `${o.type === 'depense' ? '−' : '+'}${formatEuros(o.centi
       </button>
     </div>
     <p class="aide">
-      Les opérations de ton compte Qonto. Elles ne comptent dans tes calculs qu'une fois validées.
+      Les opérations de ton compte Qonto. Elles comptent déjà dans ta trésorerie ; valide-les pour qu'elles comptent dans ton chiffre d'affaires et tes cotisations.
       <template v-if="synchroLe"> Dernière synchro le {{ synchroLe }}.</template>
     </p>
     <p v-if="etat.erreur" class="erreur" role="alert">Dernière synchro impossible : {{ etat.erreur }}</p>

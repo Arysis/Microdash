@@ -28,17 +28,30 @@ const (
 	PrevisionMoyenne = "moyenne" // moyenne des 3 derniers mois complets
 )
 
+// MouvementBanque est une opération lue sur le compte bancaire : l'argent réellement entré ou sorti.
+type MouvementBanque struct {
+	Date       time.Time
+	Centimes   int64
+	Recette    bool
+	Cotisation bool // paiement à l'URSSAF
+}
+
 type EntreeTresorerie struct {
 	Aujourdhui  time.Time
 	Profil      Profil
 	Saisies     []Transaction // au moins les 12 mois passés
 	Echeances   []Echeance    // agendas couvrant la période et la prévision
 	Recurrentes []Recurrente
-	MRR         *int64 // en euros ; nil sans Stripe
-	Solde       *int64 // solde du compte noté le jour SoldeAu
-	SoldeAu     time.Time
-	MoisPasses  int // mois affichés avant le mois en cours
-	MoisFuturs  int // mois prévus après le mois en cours
+	// Banque : opérations du compte à partir de BanqueDepuis (zéro : pas de compte connecté).
+	// Sur cette période, le réel vient du compte et non des saisies : une saisie payée
+	// ailleurs ne fausse plus le solde, une opération pas encore validée compte déjà.
+	Banque       []MouvementBanque
+	BanqueDepuis time.Time
+	MRR          *int64 // en euros ; nil sans Stripe
+	Solde        *int64 // solde du compte noté le jour SoldeAu
+	SoldeAu      time.Time
+	MoisPasses   int // mois affichés avant le mois en cours
+	MoisFuturs   int // mois prévus après le mois en cours
 }
 
 type Tresorerie struct {
@@ -100,31 +113,43 @@ func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error
 		}
 	}
 
-	// Réel : saisies jusqu'à aujourd'hui.
+	viaBanque := func(d time.Time) bool { return !e.BanqueDepuis.IsZero() && !d.Before(e.BanqueDepuis) }
+	reel := func(d time.Time, centimes int64, recette, cotisation bool) {
+		mt := idx[cleMois(d)]
+		if mt == nil || mt.Prevision {
+			return
+		}
+		switch {
+		case recette:
+			mt.Encaisse += centimes
+			noter(d, centimes)
+		case cotisation:
+			// Paiement URSSAF réel : il remplace l'estimation de sa déclaration.
+			mt.Cotisations += centimes
+			noter(d, -centimes)
+		default:
+			mt.Depenses += centimes
+			noter(d, -centimes)
+		}
+	}
+
+	// Réel : saisies jusqu'à aujourd'hui, ou opérations du compte sur la période qu'il couvre.
+	// Les recettes saisies servent toujours à la prévision.
 	recettesParMois := map[string]int64{}
 	for _, t := range e.Saisies {
 		if t.Date.After(auj) {
 			continue
 		}
-		k := cleMois(t.Date)
 		if t.Type == Recette {
-			recettesParMois[k] += t.Centimes
+			recettesParMois[cleMois(t.Date)] += t.Centimes
 		}
-		mt := idx[k]
-		if mt == nil || mt.Prevision {
-			continue
+		if !viaBanque(t.Date) {
+			reel(t.Date, t.Centimes, t.Type == Recette, t.Echeance != "")
 		}
-		switch {
-		case t.Type == Recette:
-			mt.Encaisse += t.Centimes
-			noter(t.Date, t.Centimes)
-		case t.Echeance != "":
-			// Paiement URSSAF réel : il remplace l'estimation de sa déclaration.
-			mt.Cotisations += t.Centimes
-			noter(t.Date, -t.Centimes)
-		default:
-			mt.Depenses += t.Centimes
-			noter(t.Date, -t.Centimes)
+	}
+	for _, m := range e.Banque {
+		if viaBanque(m.Date) && !m.Date.After(auj) {
+			reel(m.Date, m.Centimes, m.Recette, m.Cotisation)
 		}
 	}
 
@@ -191,7 +216,8 @@ func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error
 			return nil, err
 		}
 		mt := idx[cleMois(d)]
-		if mt == nil {
+		// Une date limite passée sur la période du compte : ce qui a été payé y figure déjà.
+		if mt == nil || (viaBanque(d) && !d.After(auj)) {
 			continue
 		}
 		montant := ec.APayer

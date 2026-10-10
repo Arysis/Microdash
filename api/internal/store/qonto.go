@@ -346,3 +346,30 @@ func (s *Store) RemettreOperationQonto(ctx context.Context, userID, id int64) er
 		return err
 	})
 }
+
+// MouvementsQonto renvoie l'argent réellement entré et sorti du compte Qonto, quel que soit le
+// statut des opérations, hors virements entre comptes de la personne, et le 1er janvier de la
+// première année lue : les synchros lisent depuis le 1er janvier. Zéro sans opération.
+func (s *Store) MouvementsQonto(ctx context.Context, userID int64) ([]calc.MouvementBanque, time.Time, error) {
+	var depuis *time.Time
+	if err := s.db.QueryRow(ctx, `SELECT min(date) FROM qonto_operations WHERE user_id = $1`, userID).Scan(&depuis); err != nil || depuis == nil {
+		return nil, time.Time{}, err
+	}
+	rows, err := s.db.Query(ctx, `SELECT q.date, q.centimes, q.type = 'recette',
+			CASE WHEN t.id IS NOT NULL THEN t.echeance <> '' ELSE q.poste_propose = $2 END
+		FROM qonto_operations q LEFT JOIN transactions t ON t.id = q.transaction_id
+		WHERE q.user_id = $1 AND q.motif <> 'interne' ORDER BY q.date`, userID, calc.PosteURSSAF)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	defer rows.Close()
+	var res []calc.MouvementBanque
+	for rows.Next() {
+		var m calc.MouvementBanque
+		if err := rows.Scan(&m.Date, &m.Centimes, &m.Recette, &m.Cotisation); err != nil {
+			return nil, time.Time{}, err
+		}
+		res = append(res, m)
+	}
+	return res, time.Date(depuis.Year(), 1, 1, 0, 0, 0, 0, time.UTC), rows.Err()
+}

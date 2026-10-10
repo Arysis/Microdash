@@ -438,6 +438,20 @@ func (s *Server) getTresorerie(w http.ResponseWriter, r *http.Request) {
 		v := lecture.MRR.ParDevise["eur"]
 		e.MRR = &v
 	}
+	// Compte Qonto connecté : son solde est noté à chaque synchro, le réel vient donc de ses opérations.
+	if s.Chiffre != nil {
+		c, err := s.Store.ConnexionQonto(ctx, uid)
+		if err != nil {
+			erreurInterne(w, r, err)
+			return
+		}
+		if c != nil {
+			if e.Banque, e.BanqueDepuis, err = s.Store.MouvementsQonto(ctx, uid); err != nil {
+				erreurInterne(w, r, err)
+				return
+			}
+		}
+	}
 	var soldeOut *soldeJSON
 	if solde != nil {
 		e.Solde, e.SoldeAu = &solde.Centimes, solde.Au
