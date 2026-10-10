@@ -362,7 +362,7 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
 
       <p class="aide">
         Prévision : {{ methode }} ; dépenses récurrentes à leurs dates ; paiements URSSAF au mois de leur date limite
-        ({{ tauxCharges.toLocaleString('fr-FR') }} % des recettes prévues). Le mois en cours compte tes saisies, plus les dépenses récurrentes et paiements URSSAF d'ici sa fin.
+        ({{ tauxCharges.toLocaleString('fr-FR') }} % des recettes prévues). Le mois en cours compte tes saisies{{ qonto?.connecte ? ' et les opérations Qonto à valider' : '' }}, plus les dépenses récurrentes et paiements URSSAF d'ici sa fin.
       </p>
     </template>
   </section>
@@ -488,6 +488,7 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
       <p class="aide">
         Chaque synchro lit les opérations réglées depuis le 1er janvier. Une opération déjà saisie à la main (même montant, à 5 jours près) y est rattachée ;
         un paiement URSSAF est proposé pour la déclaration du mois précédent ; les virements entre tes comptes sont ignorés.
+        La trésorerie part du solde réel de ton compte au début de la période, puis suit tes saisies et les opérations encore à valider ; une opération ignorée n'y compte pas.
       </p>
       <div class="actions-stripe">
         <span v-if="synchroQonto" class="aide">Synchronisé le {{ synchroQonto }}</span>
