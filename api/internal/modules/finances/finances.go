@@ -25,6 +25,7 @@ const (
 	codeSource  = "finances"
 	refQonto    = "qonto-a-valider"
 	prefixePlaf = "plafond-"
+	lienAgenda  = "/echeances"
 )
 
 // Donnees est ce que le module lit et écrit en base.
@@ -53,9 +54,7 @@ func (m Module) ATraiter(ctx context.Context, uid int64, aujourdhui time.Time) (
 		return nil, err
 	}
 	annee := aujourdhui.Year()
-	// Les saisies de l'année d'avant servent aux échéances de janvier et février (fin d'année
-	// précédente), celles de l'année d'après aux paiements URSSAF qu'elles contiennent.
-	txs, err := m.Donnees.Transactions(ctx, uid, time.Date(annee-2, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(annee+1, 12, 31, 0, 0, 0, 0, time.UTC))
+	echs, txs, err := m.echeances(ctx, uid, p, annee-1, annee)
 	if err != nil {
 		return nil, err
 	}
@@ -64,20 +63,9 @@ func (m Module) ATraiter(ctx context.Context, uid int64, aujourdhui time.Time) (
 		return nil, err
 	}
 	var res []modules.Element
-	vues := map[string]bool{}
-	for _, a := range []int{annee - 1, annee} {
-		agenda, err := calc.Agenda(a, p.VersCalc(), p.Periodicite, store.VersCalc(txs), m.Baremes)
-		if err != nil {
-			continue // pas de barème pour cette année : rien à montrer
-		}
-		for _, e := range agenda {
-			if vues[e.Code] {
-				continue
-			}
-			vues[e.Code] = true
-			if el, ok := echeance(e, faites, aujourdhui); ok {
-				res = append(res, el)
-			}
+	for _, e := range echs {
+		if el, ok := echeance(e, faites, aujourdhui); ok {
+			res = append(res, el)
 		}
 	}
 
@@ -104,6 +92,64 @@ func (m Module) ATraiter(ctx context.Context, uid int64, aujourdhui time.Time) (
 	return res, nil
 }
 
+// echeances renvoie les échéances des années de premiere à derniere (une échéance de fin
+// d'année tombe l'année d'après : elle n'est comptée qu'une fois), et les saisies lues.
+func (m Module) echeances(ctx context.Context, uid int64, p *store.Profil, premiere, derniere int) ([]calc.Echeance, []store.Transaction, error) {
+	// Les saisies de l'année d'avant servent aux échéances de janvier et février (fin d'année
+	// précédente), celles de l'année d'après aux paiements URSSAF qu'elles contiennent.
+	txs, err := m.Donnees.Transactions(ctx, uid, time.Date(premiere-1, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(derniere+1, 12, 31, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		return nil, nil, err
+	}
+	var res []calc.Echeance
+	vues := map[string]bool{}
+	for a := premiere; a <= derniere; a++ {
+		agenda, err := calc.Agenda(a, p.VersCalc(), p.Periodicite, store.VersCalc(txs), m.Baremes)
+		if err != nil {
+			continue // pas de barème pour cette année : rien à montrer
+		}
+		for _, e := range agenda {
+			if !vues[e.Code] {
+				vues[e.Code] = true
+				res = append(res, e)
+			}
+		}
+	}
+	return res, txs, nil
+}
+
+// Evenements place les échéances URSSAF et fiscales dans l'agenda.
+func (m Module) Evenements(ctx context.Context, uid int64, du, au time.Time) ([]modules.Evenement, error) {
+	p, err := m.Donnees.Profil(ctx, uid)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	echs, _, err := m.echeances(ctx, uid, p, du.Year()-1, au.Year())
+	if err != nil {
+		return nil, err
+	}
+	faites, err := m.Donnees.EcheancesFaites(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	debut, fin := du.Format(formatDate), au.Format(formatDate)
+	var res []modules.Evenement
+	for _, e := range echs {
+		if e.Date == "" || e.Date < debut || e.Date > fin {
+			continue
+		}
+		_, faite := faites[e.Code]
+		res = append(res, modules.Evenement{
+			Source: codeSource, Ref: e.Code, Titre: e.Libelle, Date: e.Date,
+			Type: "echeance", Fait: faite || e.Paye > 0, Lien: lienAgenda,
+		})
+	}
+	return res, nil
+}
+
 // echeance transforme une échéance de l'agenda en élément, si elle est proche et pas encore faite.
 func echeance(e calc.Echeance, faites map[string]time.Time, aujourdhui time.Time) (modules.Element, bool) {
 	if e.Date == "" || e.Paye > 0 {
@@ -121,7 +167,7 @@ func echeance(e calc.Echeance, faites map[string]time.Time, aujourdhui time.Time
 		return modules.Element{}, false
 	}
 	el := modules.Element{
-		Source: codeSource, Ref: e.Code, Titre: e.Libelle, Date: e.Date, Limite: true, Lien: "/agenda", Finir: true,
+		Source: codeSource, Ref: e.Code, Titre: e.Libelle, Date: e.Date, Limite: true, Lien: lienAgenda, Finir: true,
 	}
 	switch {
 	case jours <= 2:

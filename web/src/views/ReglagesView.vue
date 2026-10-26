@@ -11,6 +11,7 @@ const enPreparation = ['Mails', 'Support', 'CRM']
 
 const aides = {
   finances: 'Échéances URSSAF, plafonds et opérations Qonto à valider dans « Ce soir ». Onglet Finances.',
+  agenda: 'Tes rendez-vous, avec les tâches datées et les échéances. Lien iCal pour Home Assistant.',
   taches: 'Tes listes Ce soir, Cette semaine et Plus tard, par projet. Les tâches arrivées à échéance passent dans « Ce soir ».',
 }
 

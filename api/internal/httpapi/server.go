@@ -64,6 +64,8 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/baremes/{annee}", s.getBareme)
 		// Lien signé des e-mails : la page l'appelle en JSON, une messagerie en POST de formulaire (RFC 8058).
 		r.Post("/alertes/desinscription", s.desinscription)
+		// Lien secret du flux iCal : Home Assistant et les calendriers le lisent sans session.
+		r.Get("/ical/{jeton}.ics", s.fluxICal)
 		r.Group(func(r chi.Router) {
 			r.Use(exigerJSON)
 			r.Post("/auth/register", s.register)
@@ -117,6 +119,13 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/taches", s.createTache)
 			r.Put("/taches/{id}", s.updateTache)
 			r.Delete("/taches/{id}", s.deleteTache)
+			r.Get("/calendrier", s.getCalendrier)
+			r.Get("/calendrier/flux", s.getFlux)
+			r.Post("/calendrier/flux", s.changerFlux)
+			r.Delete("/calendrier/flux", s.supprimerFlux)
+			r.Post("/evenements", s.createEvenement)
+			r.Put("/evenements/{id}", s.updateEvenement)
+			r.Delete("/evenements/{id}", s.deleteEvenement)
 		})
 	})
 	return r

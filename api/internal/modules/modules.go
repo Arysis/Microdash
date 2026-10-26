@@ -45,7 +45,8 @@ type Evenement struct {
 	Date   string `json:"date"`            // AAAA-MM-JJ
 	Heure  string `json:"heure,omitempty"` // HH:MM, heure de Paris ; vide : toute la journée
 	Duree  int    `json:"duree,omitempty"` // minutes, pour un événement à heure fixe
-	Type   string `json:"type"`            // evenement, tache, echeance
+	Notes  string `json:"notes,omitempty"`
+	Type   string `json:"type"` // evenement, tache, echeance
 	Fait   bool   `json:"fait,omitempty"`
 	Lien   string `json:"lien,omitempty"`
 }

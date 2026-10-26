@@ -238,7 +238,7 @@ function changerVue(v) {
     </template>
   </section>
 
-  <RouterLink v-if="echeance" to="/agenda" class="carte carte-echeance">
+  <RouterLink v-if="echeance" to="/echeances" class="carte carte-echeance">
     <span class="tuile" aria-hidden="true"><span>{{ moisCourt(echeance.date) }}</span><strong>{{ jourDuMois(echeance.date) }}</strong></span>
     <span class="texte">
       <span class="surtitre">Prochaine échéance · {{ dans(joursRestants(echeance.date, aujourdhuiAgenda)) }}</span>

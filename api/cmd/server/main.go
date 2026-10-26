@@ -22,6 +22,7 @@ import (
 	"github.com/arysis/microdash/api/internal/chiffre"
 	"github.com/arysis/microdash/api/internal/httpapi"
 	"github.com/arysis/microdash/api/internal/modules"
+	"github.com/arysis/microdash/api/internal/modules/agenda"
 	"github.com/arysis/microdash/api/internal/modules/finances"
 	"github.com/arysis/microdash/api/internal/modules/taches"
 	"github.com/arysis/microdash/api/internal/store"
@@ -89,6 +90,7 @@ func run() error {
 	api.Modules = modules.NewRegistre(
 		finances.Module{Donnees: st, Baremes: set},
 		taches.Module{Donnees: st, Aujourdhui: func() time.Time { return alertes.Aujourdhui(time.Now()) }},
+		agenda.Module{Donnees: st},
 	)
 	go genererRecurrentes(ctx, st)
 

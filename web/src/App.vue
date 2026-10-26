@@ -24,6 +24,7 @@ const groupe = computed(() => route.meta.groupe)
         <RouterLink to="/tableau-de-bord">Tableau de bord</RouterLink>
         <RouterLink to="/saisies">Saisies</RouterLink>
         <RouterLink to="/tresorerie">Trésorerie</RouterLink>
+        <RouterLink to="/echeances">Échéances</RouterLink>
       </nav>
     </header>
     <main class="contenu-app">
@@ -32,7 +33,7 @@ const groupe = computed(() => route.meta.groupe)
     <nav v-if="session.user?.profil_complet" class="onglets" aria-label="Navigation principale">
       <RouterLink to="/ce-soir"><Moon v-bind="icone" />Ce soir</RouterLink>
       <RouterLink v-if="moduleActif('taches')" to="/taches"><ListChecks v-bind="icone" />Tâches</RouterLink>
-      <RouterLink to="/agenda"><Calendar v-bind="icone" />Agenda</RouterLink>
+      <RouterLink v-if="moduleActif('agenda')" to="/agenda"><Calendar v-bind="icone" />Agenda</RouterLink>
       <RouterLink v-if="moduleActif('finances')" to="/tableau-de-bord" :class="{ 'router-link-active': groupe === 'finances' }"><Wallet v-bind="icone" />Finances</RouterLink>
       <RouterLink to="/plus" :class="{ 'router-link-active': groupe === 'plus' }"><Ellipsis v-bind="icone" />Plus</RouterLink>
     </nav>

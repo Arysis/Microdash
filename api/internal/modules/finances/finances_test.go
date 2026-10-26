@@ -87,7 +87,7 @@ func TestATraiter(t *testing.T) {
 	if !ok {
 		t.Fatalf("déclaration du 3e trimestre absente : %+v", els)
 	}
-	if t3.Importance != 1 || !t3.Finir || t3.Lien != "/agenda" || !strings.HasPrefix(t3.Detail, "Chiffre d'affaires à déclarer") {
+	if t3.Importance != 1 || !t3.Finir || t3.Lien != "/echeances" || !strings.HasPrefix(t3.Detail, "Chiffre d'affaires à déclarer") {
 		t.Errorf("déclaration T3 = %+v", t3)
 	}
 	if _, ok := refs["urssaf-2026-t4"]; ok {
@@ -130,5 +130,32 @@ func TestFinir(t *testing.T) {
 	}
 	if len(f.marquees) != 1 || f.marquees[0] != "urssaf-2026-t3" {
 		t.Fatalf("échéances cochées = %v", f.marquees)
+	}
+}
+
+func TestEvenements(t *testing.T) {
+	f := &fausses{
+		profil: &store.Profil{Categorie: "services_bic", NatureCFP: "artisan", DebutActivite: jour("2024-03-01"), Periodicite: "trimestrielle"},
+		faites: map[string]time.Time{"urssaf-2026-t2": jour("2026-07-30")},
+	}
+	evs, err := module(t, f).Evenements(context.Background(), 1, jour("2026-07-01"), jour("2027-01-31"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	par := map[string]modules.Evenement{}
+	for _, e := range evs {
+		if e.Date < "2026-07-01" || e.Date > "2027-01-31" {
+			t.Errorf("échéance hors période : %+v", e)
+		}
+		par[e.Ref] = e
+	}
+	if e, ok := par["urssaf-2026-t2"]; !ok || !e.Fait || e.Type != "echeance" {
+		t.Errorf("T2 = %+v (attendue, faite)", e)
+	}
+	if e, ok := par["urssaf-2026-t3"]; !ok || e.Fait || e.Date != "2026-11-02" {
+		t.Errorf("T3 = %+v", e)
+	}
+	if e, ok := par["cfe-2026"]; !ok || e.Date != "2026-12-15" {
+		t.Errorf("CFE = %+v", e)
 	}
 }

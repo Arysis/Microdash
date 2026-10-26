@@ -10,8 +10,9 @@ const erreur = ref('')
 const enCours = ref('')
 // Élément dont le choix « Plus tard » ou « Tâche » est ouvert : { cle, choix }.
 const choixOuvert = ref(null)
-// Tâches rangées dans « Ce soir » (null : module Tâches désactivé).
+// Tâches rangées dans « Ce soir » (null : module Tâches désactivé) et rendez-vous du jour.
 const soiree = ref(null)
+const rendezVous = ref([])
 
 const reports = [
   { quand: 'demain', libelle: 'Demain' },
@@ -22,12 +23,15 @@ const reports = [
 async function charger() {
   erreur.value = ''
   try {
-    const [cs, ts] = await Promise.all([
-      api.get('/ce-soir'),
+    const cs = await api.get('/ce-soir')
+    const j = cs.aujourdhui
+    const [ts, cal] = await Promise.all([
       moduleActif('taches') ? api.get('/taches') : null,
+      moduleActif('agenda') ? api.get(`/calendrier?du=${j}&au=${j}`).catch(() => null) : null,
     ])
     donnees.value = cs
     soiree.value = ts && ts.filter((t) => t.quand === 'ce_soir')
+    rendezVous.value = (cal?.evenements || []).filter((e) => e.type === 'evenement')
   } catch (e) {
     erreur.value = e.message
   }
@@ -135,15 +139,23 @@ const metaTache = (t) => [nomProjet(t.projet), duree(t.duree_minutes)].filter(Bo
       </div>
     </div>
 
-    <section v-if="soiree" class="carte liste-soir" aria-labelledby="titre-soiree">
+    <section v-if="soiree || rendezVous.length" class="carte liste-soir" aria-labelledby="titre-soiree">
       <div class="titre-ligne">
         <h2 id="titre-soiree">Ta soirée</h2>
         <span v-if="minutesSoiree" class="aide">{{ duree(minutesSoiree) }}</span>
       </div>
-      <p v-if="!soiree.length" class="vide">
+      <ul v-if="rendezVous.length" class="rendez-vous">
+        <li v-for="e in rendezVous" :key="e.ref">
+          <RouterLink to="/agenda" class="rdv">
+            <span class="heure">{{ e.heure || 'Journée' }}</span>
+            <span class="titre">{{ e.titre }}</span>
+          </RouterLink>
+        </li>
+      </ul>
+      <p v-if="soiree && !soiree.length" class="vide">
         Aucune tâche pour ce soir. <RouterLink to="/taches">Choisir dans tes tâches</RouterLink>
       </p>
-      <ul>
+      <ul v-if="soiree">
         <li v-for="t in soiree" :key="t.id" :class="['tache', { faite: t.faite }]">
           <label class="case-tache">
             <input type="checkbox" :checked="t.faite" @change="cocher(t)" />
@@ -225,4 +237,7 @@ const metaTache = (t) => [nomProjet(t.projet), duree(t.duree_minutes)].filter(Bo
 .case-tache input { width: 22px; height: 22px; min-height: 0; padding: 0; margin: 0 0 0 var(--e1); flex-shrink: 0; accent-color: var(--sarcelle); }
 .case-tache > span { display: grid; gap: 2px; }
 .faite .titre { text-decoration: line-through; color: var(--pierre); }
+.rendez-vous li { padding: 0; }
+.rdv { display: flex; align-items: center; gap: var(--e3); min-height: 48px; color: var(--encre); text-decoration: none; }
+.rdv .heure { min-width: 56px; font-size: 13px; font-weight: 600; color: var(--sarcelle); font-variant-numeric: tabular-nums; }
 </style>

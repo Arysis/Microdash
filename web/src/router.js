@@ -15,6 +15,7 @@ const routes = [
   { path: '/saisies', component: () => import('./views/TransactionsView.vue'), meta: { acces: 'membre', titre: 'Saisies', relief: true, groupe: 'finances' } },
   { path: '/tresorerie', component: () => import('./views/TresorerieView.vue'), meta: { acces: 'membre', titre: 'Trésorerie', relief: true, groupe: 'finances' } },
   { path: '/taches', component: () => import('./views/TachesView.vue'), meta: { acces: 'membre', titre: 'Tâches', relief: true } },
+  { path: '/echeances', component: () => import('./views/EcheancesView.vue'), meta: { acces: 'membre', titre: 'Échéances', relief: true, groupe: 'finances' } },
   { path: '/agenda', component: () => import('./views/AgendaView.vue'), meta: { acces: 'membre', titre: 'Agenda', relief: true } },
   { path: '/desinscription', component: () => import('./views/DesinscriptionView.vue'), meta: { acces: 'public', titre: 'Rappels par e-mail', noindex: true } },
   { path: '/profil', component: () => import('./views/ProfilView.vue'), meta: { acces: 'membre', titre: 'Ton activité', groupe: 'plus' } },
