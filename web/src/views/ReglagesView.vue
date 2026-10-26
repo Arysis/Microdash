@@ -7,10 +7,11 @@ const modules = ref(null)
 const erreur = ref('')
 
 // Modules annoncés mais pas encore livrés : affichés sans interrupteur.
-const enPreparation = ['Tâches', 'Mails', 'Support', 'CRM']
+const enPreparation = ['Mails', 'Support', 'CRM']
 
 const aides = {
   finances: 'Échéances URSSAF, plafonds et opérations Qonto à valider dans « Ce soir ». Onglet Finances.',
+  taches: 'Tes listes Ce soir, Cette semaine et Plus tard, par projet. Les tâches arrivées à échéance passent dans « Ce soir ».',
 }
 
 onMounted(async () => {

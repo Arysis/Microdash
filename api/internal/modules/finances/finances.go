@@ -121,7 +121,7 @@ func echeance(e calc.Echeance, faites map[string]time.Time, aujourdhui time.Time
 		return modules.Element{}, false
 	}
 	el := modules.Element{
-		Source: codeSource, Ref: e.Code, Titre: e.Libelle, Date: e.Date, Lien: "/agenda", Finir: true,
+		Source: codeSource, Ref: e.Code, Titre: e.Libelle, Date: e.Date, Limite: true, Lien: "/agenda", Finir: true,
 	}
 	switch {
 	case jours <= 2:

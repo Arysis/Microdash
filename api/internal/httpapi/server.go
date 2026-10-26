@@ -112,6 +112,11 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/ce-soir", s.ceSoir)
 			r.Post("/ce-soir/fait", s.faitCeSoir)
 			r.Post("/ce-soir/plus-tard", s.plusTardCeSoir)
+			r.Post("/ce-soir/tache", s.tacheCeSoir)
+			r.Get("/taches", s.listTaches)
+			r.Post("/taches", s.createTache)
+			r.Put("/taches/{id}", s.updateTache)
+			r.Delete("/taches/{id}", s.deleteTache)
 		})
 	})
 	return r

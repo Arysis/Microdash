@@ -104,6 +104,12 @@ input, select {
   transition: border-color var(--duree) ease-out;
 }
 input:hover, select:hover { border-color: var(--pierre); }
+textarea {
+  font: 400 16px var(--police-texte); color: var(--encre); background: var(--blanc);
+  border: 1px solid var(--lin); border-radius: var(--rayon); padding: var(--e2) var(--e3);
+  width: 100%; resize: vertical;
+}
+textarea:hover { border-color: var(--pierre); }
 .ligne { display: flex; flex-wrap: wrap; gap: var(--e3); }
 .ligne > * { flex: 1 1 140px; min-width: 0; }
 input { min-width: 0; }

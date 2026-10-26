@@ -76,8 +76,9 @@ func (s *Server) ceSoir(w http.ResponseWriter, r *http.Request) {
 	sources := []sourceJSON{}
 	indisponibles := []string{}
 	elements := []modules.Element{}
-	for _, m := range s.Modules.Modules() {
-		if inactifs[m.Code()] {
+	for _, mod := range s.Modules.Modules() {
+		m, ok := mod.(modules.Source)
+		if !ok || inactifs[m.Code()] {
 			continue
 		}
 		els, err := m.ATraiter(ctx, uid, aujourdhui)

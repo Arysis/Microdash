@@ -1,13 +1,17 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watchEffect } from 'vue'
 import { api } from '../api.js'
-import { dateLongue } from '../echeances.js'
+import { dateCourte, dateLongue } from '../echeances.js'
+import { moduleActif } from '../session.js'
+import { duree, listes, nomProjet } from '../taches.js'
 
 const donnees = ref(null)
 const erreur = ref('')
 const enCours = ref('')
-// Élément dont le choix « Plus tard » est ouvert.
-const reportOuvert = ref('')
+// Élément dont le choix « Plus tard » ou « Tâche » est ouvert : { cle, choix }.
+const choixOuvert = ref(null)
+// Tâches rangées dans « Ce soir » (null : module Tâches désactivé).
+const soiree = ref(null)
 
 const reports = [
   { quand: 'demain', libelle: 'Demain' },
@@ -18,7 +22,12 @@ const reports = [
 async function charger() {
   erreur.value = ''
   try {
-    donnees.value = await api.get('/ce-soir')
+    const [cs, ts] = await Promise.all([
+      api.get('/ce-soir'),
+      moduleActif('taches') ? api.get('/taches') : null,
+    ])
+    donnees.value = cs
+    soiree.value = ts && ts.filter((t) => t.quand === 'ce_soir')
   } catch (e) {
     erreur.value = e.message
   }
@@ -31,12 +40,22 @@ const nomSource = (code) => sources.value.find((s) => s.code === code)?.nom || c
 const cle = (e) => `${e.source}/${e.ref}`
 const externe = (lien) => /^https?:\/\//.test(lien)
 
+const tachesRestantes = computed(() => (soiree.value || []).filter((t) => !t.faite))
+const minutesSoiree = computed(() => tachesRestantes.value.reduce((n, t) => n + (t.duree_minutes || 0), 0))
+
 const resume = computed(() => {
   if (!donnees.value) return ''
   const jour = dateLongue(donnees.value.aujourdhui)
   const n = elements.value.length
   if (!n) return `${jour}. Rien à traiter.`
   return `${jour}. ${n} ${n > 1 ? 'choses' : 'chose'} à traiter.`
+})
+
+// Pastille sur l'icône de l'app installée : ce qui reste à traiter ou à faire ce soir.
+watchEffect(() => {
+  if (!donnees.value || !('setAppBadge' in navigator)) return
+  const n = elements.value.length + tachesRestantes.value.length
+  ;(n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {})
 })
 
 function etiquette(e) {
@@ -48,13 +67,16 @@ function etiquette(e) {
 function quandLibelle(e) {
   if (!e.date) return ''
   const d = donnees.value.aujourdhui
-  if (e.date < d) return 'En retard'
   if (e.date === d) return "Aujourd'hui"
+  if (!e.limite) return `Reçu le ${dateCourte(e.date, Number(d.slice(0, 4)))}`
+  if (e.date < d) return 'En retard'
   return `Avant le ${dateLongue(e.date).toLowerCase()}`
 }
+const enRetard = (e) => e.limite && e.date < donnees.value.aujourdhui
+const ouvert = (e, choix) => choixOuvert.value?.cle === cle(e) && choixOuvert.value.choix === choix
 
 // Retire l'élément de la liste tout de suite ; le remet si l'API refuse.
-async function decider(e, chemin, corps) {
+async function decider(e, chemin, corps, apres) {
   enCours.value = cle(e)
   erreur.value = ''
   const avant = donnees.value
@@ -64,18 +86,39 @@ async function decider(e, chemin, corps) {
     sources: avant.sources.map((s) => (s.code === e.source ? { ...s, nombre: s.nombre - 1 } : s)),
   }
   try {
-    await api.post(chemin, { source: e.source, ref: e.ref, ...corps })
+    const res = await api.post(chemin, { source: e.source, ref: e.ref, ...corps })
+    apres?.(res)
   } catch (err) {
     donnees.value = avant
     erreur.value = err.message
   } finally {
     enCours.value = ''
-    reportOuvert.value = ''
+    choixOuvert.value = null
   }
 }
 
 const fait = (e) => decider(e, '/ce-soir/fait')
 const plusTard = (e, quand) => decider(e, '/ce-soir/plus-tard', { quand })
+// Range l'élément dans les tâches ; une tâche pour ce soir rejoint « Ta soirée ».
+const enTache = (e, quand) => decider(e, '/ce-soir/tache', { quand }, (t) => {
+  if (t.quand === 'ce_soir' && soiree.value) soiree.value = [...soiree.value, t]
+})
+
+async function cocher(t) {
+  erreur.value = ''
+  const maj = (x) => (soiree.value = soiree.value.map((y) => (y.id === x.id ? x : y)))
+  maj({ ...t, faite: !t.faite })
+  try {
+    maj(await api.put(`/taches/${t.id}`, {
+      titre: t.titre, notes: t.notes, projet: t.projet, duree_minutes: t.duree_minutes || 0,
+      quand: t.quand, echeance: t.echeance || '', faite: !t.faite,
+    }))
+  } catch (err) {
+    maj(t)
+    erreur.value = err.message
+  }
+}
+const metaTache = (t) => [nomProjet(t.projet), duree(t.duree_minutes)].filter(Boolean).join(' · ')
 </script>
 
 <template>
@@ -92,6 +135,27 @@ const plusTard = (e, quand) => decider(e, '/ce-soir/plus-tard', { quand })
       </div>
     </div>
 
+    <section v-if="soiree" class="carte liste-soir" aria-labelledby="titre-soiree">
+      <div class="titre-ligne">
+        <h2 id="titre-soiree">Ta soirée</h2>
+        <span v-if="minutesSoiree" class="aide">{{ duree(minutesSoiree) }}</span>
+      </div>
+      <p v-if="!soiree.length" class="vide">
+        Aucune tâche pour ce soir. <RouterLink to="/taches">Choisir dans tes tâches</RouterLink>
+      </p>
+      <ul>
+        <li v-for="t in soiree" :key="t.id" :class="['tache', { faite: t.faite }]">
+          <label class="case-tache">
+            <input type="checkbox" :checked="t.faite" @change="cocher(t)" />
+            <span>
+              <span class="titre">{{ t.titre }}</span>
+              <small v-if="metaTache(t)" class="aide">{{ metaTache(t) }}</small>
+            </span>
+          </label>
+        </li>
+      </ul>
+    </section>
+
     <section class="carte liste-soir" aria-labelledby="titre-traiter">
       <h2 id="titre-traiter">À traiter</h2>
       <p v-if="erreur" class="erreur" role="alert">{{ erreur }}</p>
@@ -105,21 +169,26 @@ const plusTard = (e, quand) => decider(e, '/ce-soir/plus-tard', { quand })
         <li v-for="e in elements" :key="cle(e)">
           <div class="meta">
             <span :class="['badge', { fort: e.importance > 0 }]">{{ nomSource(e.source) }}<template v-if="etiquette(e)"> · {{ etiquette(e) }}</template></span>
-            <span v-if="quandLibelle(e)" :class="{ retard: e.date < donnees.aujourdhui }">{{ quandLibelle(e) }}</span>
+            <span v-if="quandLibelle(e)" :class="{ retard: enRetard(e) }">{{ quandLibelle(e) }}</span>
           </div>
           <p class="titre">{{ e.titre }}</p>
           <p v-if="e.detail" class="aide">{{ e.detail }}</p>
 
-          <div v-if="reportOuvert === cle(e)" class="actions" role="group" :aria-label="`Remettre « ${e.titre} » à plus tard`">
+          <div v-if="ouvert(e, 'report')" class="actions" role="group" :aria-label="`Remettre « ${e.titre} » à plus tard`">
             <button v-for="r in reports" :key="r.quand" class="bouton secondaire" :disabled="enCours === cle(e)" @click="plusTard(e, r.quand)">{{ r.libelle }}</button>
-            <button class="bouton secondaire" @click="reportOuvert = ''">Annuler</button>
+            <button class="bouton secondaire" @click="choixOuvert = null">Annuler</button>
+          </div>
+          <div v-else-if="ouvert(e, 'tache')" class="actions" role="group" :aria-label="`Ranger « ${e.titre} » dans les tâches`">
+            <button v-for="l in listes" :key="l.quand" class="bouton secondaire" :disabled="enCours === cle(e)" @click="enTache(e, l.quand)">{{ l.nom }}</button>
+            <button class="bouton secondaire" @click="choixOuvert = null">Annuler</button>
           </div>
           <div v-else class="actions">
             <template v-if="e.lien">
               <a v-if="externe(e.lien)" class="bouton secondaire" :href="e.lien" target="_blank" rel="noopener">Ouvrir</a>
               <RouterLink v-else class="bouton secondaire" :to="e.lien">Ouvrir</RouterLink>
             </template>
-            <button class="bouton secondaire" :disabled="enCours === cle(e)" @click="reportOuvert = cle(e)">Plus tard</button>
+            <button class="bouton secondaire" :disabled="enCours === cle(e)" @click="choixOuvert = { cle: cle(e), choix: 'report' }">Plus tard</button>
+            <button v-if="soiree && e.source !== 'taches'" class="bouton secondaire" :disabled="enCours === cle(e)" @click="choixOuvert = { cle: cle(e), choix: 'tache' }">Tâche</button>
             <button v-if="e.finir" class="bouton principal" :disabled="enCours === cle(e)" @click="fait(e)">Fait</button>
           </div>
         </li>
@@ -148,5 +217,12 @@ const plusTard = (e, quand) => decider(e, '/ce-soir/plus-tard', { quand })
 .retard { color: var(--brique); font-weight: 600; }
 .titre { font-weight: 600; }
 .actions { display: flex; flex-wrap: wrap; gap: var(--e2); margin-top: var(--e2); }
-.actions .bouton { flex: 1 1 0; min-width: 88px; padding: 0 var(--e3); font-size: 14px; }
+.actions .bouton { flex: 1 1 0; min-width: 72px; padding: 0 var(--e2); font-size: 14px; }
+.liste-soir .titre-ligne { margin-bottom: var(--e2); }
+.liste-soir .titre-ligne h2 { margin: 0; }
+.liste-soir li.tache { padding: 0; }
+.case-tache { display: flex; align-items: center; gap: var(--e3); min-height: 52px; font-weight: 400; cursor: pointer; }
+.case-tache input { width: 22px; height: 22px; min-height: 0; padding: 0; margin: 0 0 0 var(--e1); flex-shrink: 0; accent-color: var(--sarcelle); }
+.case-tache > span { display: grid; gap: 2px; }
+.faite .titre { text-decoration: line-through; color: var(--pierre); }
 </style>
