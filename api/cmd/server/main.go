@@ -21,6 +21,8 @@ import (
 	"github.com/arysis/microdash/api/internal/bareme"
 	"github.com/arysis/microdash/api/internal/chiffre"
 	"github.com/arysis/microdash/api/internal/httpapi"
+	"github.com/arysis/microdash/api/internal/modules"
+	"github.com/arysis/microdash/api/internal/modules/finances"
 	"github.com/arysis/microdash/api/internal/store"
 )
 
@@ -83,6 +85,7 @@ func run() error {
 	}
 	api.StripeURL = os.Getenv("STRIPE_API_URL") // tests uniquement : faux serveur Stripe
 	api.QontoURL = os.Getenv("QONTO_API_URL")   // tests uniquement : faux serveur Qonto
+	api.Modules = modules.NewRegistre(finances.Module{Donnees: st, Baremes: set})
 	go genererRecurrentes(ctx, st)
 
 	srv := &http.Server{

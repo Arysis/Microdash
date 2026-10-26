@@ -27,6 +27,7 @@ import (
 	"github.com/arysis/microdash/api/internal/calc"
 	"github.com/arysis/microdash/api/internal/chiffre"
 	"github.com/arysis/microdash/api/internal/exports"
+	"github.com/arysis/microdash/api/internal/modules"
 	"github.com/arysis/microdash/api/internal/store"
 )
 
@@ -44,6 +45,7 @@ type Server struct {
 	Chiffre      *chiffre.Cle      // chiffre les clés Stripe et Qonto ; nil : connexions désactivées
 	StripeURL    string            // vide : API Stripe ; une autre adresse sert aux tests
 	QontoURL     string            // vide : API Qonto ; une autre adresse sert aux tests
+	Modules      *modules.Registre // modules du copilote, sources de « Ce soir »
 	echecsStripe sync.Map          // compte → heure du dernier échec de lecture Stripe
 	now          func() time.Time
 }
@@ -105,6 +107,11 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/qonto/operations/{id}/valider", s.validerOperationQonto)
 			r.Post("/qonto/operations/{id}/ignorer", s.ignorerOperationQonto)
 			r.Post("/qonto/operations/{id}/remettre", s.remettreOperationQonto)
+			r.Get("/modules", s.listModules)
+			r.Put("/modules/{code}", s.putModule)
+			r.Get("/ce-soir", s.ceSoir)
+			r.Post("/ce-soir/fait", s.faitCeSoir)
+			r.Post("/ce-soir/plus-tard", s.plusTardCeSoir)
 		})
 	})
 	return r

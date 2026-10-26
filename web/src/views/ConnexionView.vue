@@ -17,7 +17,7 @@ async function valider() {
   try {
     const chemin = props.mode === 'connexion' ? '/auth/login' : '/auth/register'
     session.user = await api.post(chemin, { email: email.value, mot_de_passe: motDePasse.value })
-    router.push(session.user.profil_complet ? '/tableau-de-bord' : '/profil')
+    router.push(session.user.profil_complet ? '/ce-soir' : '/profil')
   } catch (e) {
     erreur.value = e.message
   } finally {

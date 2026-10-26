@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { session, chargerSession } from './session.js'
+import { session, chargerSession, chargerModules } from './session.js'
 import { site } from '../theme.js'
 
 // acces : « public » pour tout le monde, « invite » pour les visiteurs non connectés, « membre » pour l'app.
@@ -9,13 +9,17 @@ const routes = [
   { path: '/inscription', component: () => import('./views/ConnexionView.vue'), props: { mode: 'inscription' }, meta: { acces: 'invite', titre: 'Créer un compte', description: 'Crée ton compte Microdash gratuit avec une adresse e-mail.' } },
   { path: '/mentions-legales', component: () => import('./views/MentionsLegalesView.vue'), meta: { acces: 'public', titre: 'Mentions légales', description: "Éditeur et hébergeur du site Microdash." } },
   { path: '/confidentialite', component: () => import('./views/ConfidentialiteView.vue'), meta: { acces: 'public', titre: 'Confidentialité', description: 'Les données que Microdash garde, pourquoi, combien de temps, et comment les effacer.' } },
-  { path: '/tableau-de-bord', component: () => import('./views/TableauDeBordView.vue'), meta: { acces: 'membre', titre: 'Tableau de bord', relief: true } },
-  { path: '/saisies', component: () => import('./views/TransactionsView.vue'), meta: { acces: 'membre', titre: 'Saisies', relief: true } },
-  { path: '/tresorerie', component: () => import('./views/TresorerieView.vue'), meta: { acces: 'membre', titre: 'Trésorerie', relief: true } },
+  { path: '/ce-soir', component: () => import('./views/CeSoirView.vue'), meta: { acces: 'membre', titre: 'Ce soir', relief: true } },
+  // groupe : onglet du menu allumé sur la page (Finances regroupe trois pages).
+  { path: '/tableau-de-bord', component: () => import('./views/TableauDeBordView.vue'), meta: { acces: 'membre', titre: 'Tableau de bord', relief: true, groupe: 'finances' } },
+  { path: '/saisies', component: () => import('./views/TransactionsView.vue'), meta: { acces: 'membre', titre: 'Saisies', relief: true, groupe: 'finances' } },
+  { path: '/tresorerie', component: () => import('./views/TresorerieView.vue'), meta: { acces: 'membre', titre: 'Trésorerie', relief: true, groupe: 'finances' } },
   { path: '/agenda', component: () => import('./views/AgendaView.vue'), meta: { acces: 'membre', titre: 'Agenda', relief: true } },
   { path: '/desinscription', component: () => import('./views/DesinscriptionView.vue'), meta: { acces: 'public', titre: 'Rappels par e-mail', noindex: true } },
-  { path: '/profil', component: () => import('./views/ProfilView.vue'), meta: { acces: 'membre', titre: 'Ton activité' } },
-  { path: '/compte', component: () => import('./views/CompteView.vue'), meta: { acces: 'membre', titre: 'Compte' } },
+  { path: '/profil', component: () => import('./views/ProfilView.vue'), meta: { acces: 'membre', titre: 'Ton activité', groupe: 'plus' } },
+  { path: '/compte', component: () => import('./views/CompteView.vue'), meta: { acces: 'membre', titre: 'Compte', groupe: 'plus' } },
+  { path: '/plus', component: () => import('./views/PlusView.vue'), meta: { acces: 'membre', titre: 'Plus', groupe: 'plus' } },
+  { path: '/reglages', component: () => import('./views/ReglagesView.vue'), meta: { acces: 'membre', titre: 'Réglages', groupe: 'plus' } },
   // Anciennes adresses du socle.
   { path: '/transactions', redirect: '/saisies' },
   { path: '/:chemin(.*)*', component: () => import('./views/PageIntrouvableView.vue'), meta: { acces: 'public', titre: 'Page introuvable', noindex: true } },
@@ -30,10 +34,11 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   if (!session.charge) await chargerSession()
   const connecte = Boolean(session.user)
-  if (to.path === '/' && connecte) return '/tableau-de-bord'
-  if (to.meta.acces === 'invite' && connecte) return '/tableau-de-bord'
+  if (to.path === '/' && connecte) return '/ce-soir'
+  if (to.meta.acces === 'invite' && connecte) return '/ce-soir'
   if (to.meta.acces === 'membre') {
     if (!connecte) return '/connexion'
+    if (!session.modules) await chargerModules()
     // Tant que le profil n'est pas renseigné, aucun calcul n'est possible.
     if (!session.user.profil_complet && to.path !== '/profil') return '/profil'
   }

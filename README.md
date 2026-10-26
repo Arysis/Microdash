@@ -45,6 +45,16 @@ Remplace `8080` par ton `WEB_PORT`, et garde `COOKIE_SECURE=true` dans le `.env`
 
 Sauvegarde de la base : `docker compose exec db pg_dump -U microdash microdash > sauvegarde.sql`.
 
+## Ce soir et les modules
+
+La page d'accueil de l'app est « Ce soir » : une seule liste de ce qui est à traiter, toutes sources confondues, triée du plus pressant au moins pressant. Chaque élément se marque « Fait » ou se remet à plus tard (demain, samedi ou lundi). Un élément fait ne revient pas ; un élément reporté revient le jour choisi.
+
+Chaque source est un module (`api/internal/modules`). Un module donne son code, son nom et ses éléments à traiter ; le registre est monté dans `cmd/server/main.go`. Pour l'instant, un seul module :
+
+- **Finances** : les échéances URSSAF et fiscales 14 jours avant leur date (et jusqu'à 60 jours de retard), les plafonds à 80 % ou dépassés, et les opérations Qonto à valider. « Fait » sur une échéance la coche aussi dans l'agenda.
+
+Chacun peut désactiver un module dans Plus › Réglages : il quitte « Ce soir » et le menu, ses données restent.
+
 ## Rappels par e-mail (Resend)
 
 Sans `RESEND_API_KEY`, l'app marche normalement et n'envoie aucun e-mail. Pour activer les rappels :
