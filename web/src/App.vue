@@ -1,8 +1,8 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { House, List, Wallet, Calendar, CircleUser } from 'lucide-vue-next'
-import { session } from './session.js'
+import { Moon, Calendar, Wallet, Ellipsis } from 'lucide-vue-next'
+import { session, moduleActif } from './session.js'
 import LogoMicrodash from './components/LogoMicrodash.vue'
 import FenetreConfirmation from './components/FenetreConfirmation.vue'
 
@@ -12,22 +12,28 @@ const miseEnPageApp = computed(() => route.meta.acces === 'membre')
 const relief = computed(() => Boolean(route.meta.relief))
 const annee = new Date().getFullYear()
 const icone = { size: 24, 'stroke-width': 1.75, 'aria-hidden': 'true' }
+// Onglet allumé pour les pages d'un groupe (Finances : trois pages, Plus : compte et réglages).
+const groupe = computed(() => route.meta.groupe)
 </script>
 
 <template>
   <div v-if="miseEnPageApp" :class="{ 'ecran-relief': relief }">
     <header :class="['entete-app', { relief }]">
-      <RouterLink to="/tableau-de-bord" aria-label="Microdash, tableau de bord"><LogoMicrodash /></RouterLink>
+      <RouterLink to="/ce-soir" aria-label="Microdash, ce soir"><LogoMicrodash /></RouterLink>
+      <nav v-if="groupe === 'finances'" class="sous-onglets" aria-label="Finances">
+        <RouterLink to="/tableau-de-bord">Tableau de bord</RouterLink>
+        <RouterLink to="/saisies">Saisies</RouterLink>
+        <RouterLink to="/tresorerie">Trésorerie</RouterLink>
+      </nav>
     </header>
     <main class="contenu-app">
       <RouterView />
     </main>
     <nav v-if="session.user?.profil_complet" class="onglets" aria-label="Navigation principale">
-      <RouterLink to="/tableau-de-bord"><House v-bind="icone" />Accueil</RouterLink>
-      <RouterLink to="/saisies"><List v-bind="icone" />Saisies</RouterLink>
-      <RouterLink to="/tresorerie"><Wallet v-bind="icone" />Trésorerie</RouterLink>
+      <RouterLink to="/ce-soir"><Moon v-bind="icone" />Ce soir</RouterLink>
       <RouterLink to="/agenda"><Calendar v-bind="icone" />Agenda</RouterLink>
-      <RouterLink to="/compte"><CircleUser v-bind="icone" />Compte</RouterLink>
+      <RouterLink v-if="moduleActif('finances')" to="/tableau-de-bord" :class="{ 'router-link-active': groupe === 'finances' }"><Wallet v-bind="icone" />Finances</RouterLink>
+      <RouterLink to="/plus" :class="{ 'router-link-active': groupe === 'plus' }"><Ellipsis v-bind="icone" />Plus</RouterLink>
     </nav>
   </div>
 
@@ -37,7 +43,7 @@ const icone = { size: 24, 'stroke-width': 1.75, 'aria-hidden': 'true' }
         <RouterLink to="/" aria-label="Microdash, accueil"><LogoMicrodash /></RouterLink>
         <div class="liens-entete">
           <template v-if="session.user">
-            <RouterLink class="bouton principal" to="/tableau-de-bord">Ouvrir l'app</RouterLink>
+            <RouterLink class="bouton principal" to="/ce-soir">Ouvrir l'app</RouterLink>
           </template>
           <template v-else>
             <RouterLink class="lien-entete" to="/connexion">Se connecter</RouterLink>
@@ -73,6 +79,14 @@ const icone = { size: 24, 'stroke-width': 1.75, 'aria-hidden': 'true' }
 .entete-app.relief { background: var(--sarcelle); border-bottom-color: var(--sarcelle); }
 .entete-app.relief a { color: var(--blanc); }
 .entete-app.relief :focus-visible { outline-color: var(--blanc); }
+.sous-onglets { display: flex; gap: var(--e1); margin-top: var(--e2); overflow-x: auto; }
+.entete-app .sous-onglets a {
+  min-height: 36px; padding: 0 var(--e3); border-radius: var(--rayon); align-items: center;
+  font-size: 14px; font-weight: 500; white-space: nowrap;
+  transition: background-color var(--duree) ease-out;
+}
+.entete-app.relief .sous-onglets a { color: var(--blanc); background: var(--sur-sarcelle); }
+.entete-app.relief .sous-onglets a.router-link-active { background: var(--blanc); color: var(--sarcelle); font-weight: 600; }
 .contenu-app { max-width: 640px; margin: 0 auto; padding: var(--e5) var(--e4) calc(96px + env(safe-area-inset-bottom)); }
 
 .onglets {

@@ -39,7 +39,7 @@ async function enregistrer() {
     await api.put('/profil', { ...profil, categorie_secondaire: mixte.value ? profil.categorie_secondaire : '' })
     const etaitNouveau = premiereFois.value
     session.user.profil_complet = true
-    if (etaitNouveau) router.push('/tableau-de-bord')
+    if (etaitNouveau) router.push('/ce-soir')
     else message.value = 'Profil enregistré.'
   } catch (e) {
     erreur.value = e.message
