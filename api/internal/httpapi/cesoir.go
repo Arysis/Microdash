@@ -127,7 +127,8 @@ func (s *Server) faitCeSoir(w http.ResponseWriter, r *http.Request) {
 	ctx, uid := r.Context(), userID(r.Context())
 	if f, ok := m.(modules.Finisseur); ok {
 		if err := f.Finir(ctx, uid, in.Ref); err != nil {
-			erreurInterne(w, r, err)
+			slog.Error("ce soir : fait", "module", m.Code(), "compte", uid, "err", err)
+			erreur(w, http.StatusBadGateway, m.Nom()+" : "+err.Error())
 			return
 		}
 	}

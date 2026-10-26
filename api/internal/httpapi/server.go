@@ -28,6 +28,7 @@ import (
 	"github.com/arysis/microdash/api/internal/chiffre"
 	"github.com/arysis/microdash/api/internal/exports"
 	"github.com/arysis/microdash/api/internal/modules"
+	"github.com/arysis/microdash/api/internal/modules/mails"
 	"github.com/arysis/microdash/api/internal/store"
 )
 
@@ -46,6 +47,7 @@ type Server struct {
 	StripeURL    string            // vide : API Stripe ; une autre adresse sert aux tests
 	QontoURL     string            // vide : API Qonto ; une autre adresse sert aux tests
 	Modules      *modules.Registre // modules du copilote, sources de « Ce soir »
+	Mails        *mails.Module     // module Mails : synchro et archivage Gmail
 	echecsStripe sync.Map          // compte → heure du dernier échec de lecture Stripe
 	now          func() time.Time
 }
@@ -126,6 +128,14 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/evenements", s.createEvenement)
 			r.Put("/evenements/{id}", s.updateEvenement)
 			r.Delete("/evenements/{id}", s.deleteEvenement)
+			r.Get("/mails", s.getMails)
+			r.Put("/mails/connexion", s.putConnexionMail)
+			r.Delete("/mails/connexion", s.deleteConnexionMail)
+			r.Put("/mails/important-gmail", s.putImportantGmail)
+			r.Post("/mails/synchroniser", s.synchroMails)
+			r.Post("/mails/{ref}/archiver", s.archiverMail)
+			r.Post("/mails/regles", s.createRegleMail)
+			r.Delete("/mails/regles/{id}", s.deleteRegleMail)
 		})
 	})
 	return r

@@ -49,11 +49,29 @@ Sauvegarde de la base : `docker compose exec db pg_dump -U microdash microdash >
 
 La page d'accueil de l'app est « Ce soir » : une seule liste de ce qui est à traiter, toutes sources confondues, triée du plus pressant au moins pressant. Chaque élément se marque « Fait » ou se remet à plus tard (demain, samedi ou lundi). Un élément fait ne revient pas ; un élément reporté revient le jour choisi.
 
-Chaque source est un module (`api/internal/modules`). Un module donne son code, son nom et ses éléments à traiter ; le registre est monté dans `cmd/server/main.go`. Pour l'instant, un seul module :
+Chaque source est un module (`api/internal/modules`). Un module donne son code, son nom et, s'il le veut, ses éléments à traiter (`Source`) et ce qu'il place dans l'agenda (`Calendrier`) ; le registre est monté dans `cmd/server/main.go`. Les modules :
 
-- **Finances** : les échéances URSSAF et fiscales 14 jours avant leur date (et jusqu'à 60 jours de retard), les plafonds à 80 % ou dépassés, et les opérations Qonto à valider. « Fait » sur une échéance la coche aussi dans l'agenda.
+- **Finances** : les échéances URSSAF et fiscales 14 jours avant leur date (et jusqu'à 60 jours de retard), les plafonds à 80 % ou dépassés, et les opérations Qonto à valider. « Fait » sur une échéance la coche aussi dans la page Échéances.
+- **Tâches** : listes Ce soir, Cette semaine et Plus tard, par projet (Educari, SaaS, Microdash, perso). Une durée écrite à la fin (« Relancer Paul 15 min », « Compta 1 h 30 ») est comptée dans « Ta soirée ». Une tâche arrivée à échéance passe dans « À traiter ». Le bouton « Tâche » d'un élément de « Ce soir » le range dans les tâches ; cocher la tâche prévient son module d'origine (l'échéance est cochée, le mail archivé).
+- **Agenda** : rendez-vous, avec les tâches datées et les échéances, en vue Semaine ou Mois. Les rendez-vous du jour s'affichent dans « Ta soirée ».
+- **Mails** : les mails importants de la boîte de réception Gmail (voir plus bas). « Fait » archive le mail.
 
 Chacun peut désactiver un module dans Plus › Réglages : il quitte « Ce soir » et le menu, ses données restent.
+
+### Agenda dans Home Assistant
+
+Dans l'app, Agenda › « Dans Home Assistant » › Créer le lien. Le lien (secret, montré une seule fois) sert un flux iCal : rendez-vous, tâches datées et échéances, de deux mois en arrière à un an en avant. Dans Home Assistant : Paramètres › Appareils et services › Ajouter une intégration › **Remote Calendar**, et coller le lien. Le même lien s'ajoute au calendrier du téléphone (abonnement par URL). « Changer le lien » coupe l'ancien.
+
+### Mails (Gmail)
+
+Le module lit Gmail en IMAP avec un **mot de passe d'application** Google, pas avec le mot de passe du compte :
+
+1. Activer la validation en deux étapes sur le compte Google (obligatoire pour les mots de passe d'application).
+2. Vérifier que l'IMAP est activé : Gmail › Paramètres › Transfert et POP/IMAP › Activer IMAP.
+3. Créer le mot de passe sur [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) (nom : « Microdash ») et copier les 16 lettres.
+4. Dans l'app : Plus › Réglages › Gmail, coller l'adresse et le mot de passe. Il est vérifié auprès de Gmail, puis chiffré avec `CLE_CHIFFREMENT` (obligatoire pour ce module).
+
+L'API relit la boîte de réception toutes les 5 minutes (et sur « Actualiser ») : expéditeur, sujet, date et les 200 premiers caractères des mails des 14 derniers jours. Les messages complets ne sont jamais copiés. Un mail est important s'il vient d'une adresse ou d'un domaine listé dans « Ce qui est important », ou si Gmail l'a rangé dans « Important » (désactivable). « Fait » ou « Archiver » sort le mail de la boîte de réception, comme le bouton Archiver de Gmail. Pour couper l'accès : déconnecter Gmail dans Réglages et supprimer le mot de passe d'application chez Google.
 
 ## Rappels par e-mail (Resend)
 

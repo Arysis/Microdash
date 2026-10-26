@@ -23,6 +23,8 @@ const ac = 'À COMPLÉTER'
       <li><strong>Ta trésorerie</strong> : tes dépenses récurrentes et, si tu le notes, le solde de ton compte et sa date.</li>
       <li><strong>Ta connexion Stripe</strong>, si tu l'actives : ta clé restreinte, chiffrée (AES-256-GCM) et jamais réaffichée, l'identifiant et le nom de ton compte Stripe, et les chiffres de la dernière lecture (revenu mensuel récurrent, nombre d'abonnements, encaissements et frais par mois). Aucune donnée sur tes clients n'est gardée.</li>
       <li><strong>Ta connexion Qonto</strong>, si tu l'actives : ton identifiant et ta clé API, chiffrée (AES-256-GCM) et jamais réaffichée, le nom de ton organisation, le solde de tes comptes et, pour chaque opération lue, sa date, son montant, son libellé et sa référence. Rien n'est jamais écrit dans ton compte Qonto.</li>
+      <li><strong>Tes tâches et tes rendez-vous</strong>, si tu les saisis, et l'empreinte de ton lien d'agenda iCal (le lien lui-même n'est pas gardé).</li>
+      <li><strong>Ta connexion Gmail</strong>, si tu l'actives : ton adresse et ton mot de passe d'application, chiffré (AES-256-GCM) et jamais réaffiché, et, pour les mails de ta boîte de réception des 14 derniers jours, l'expéditeur, le sujet, la date, le statut lu ou non et les 200 premiers caractères du texte. Les messages complets et les pièces jointes ne sont jamais copiés. La seule action faite dans Gmail est l'archivage d'un mail, quand tu le demandes.</li>
     </ul>
     <p>Nous ne demandons ni ton nom, ni ton numéro de téléphone, ni tes coordonnées bancaires.</p>
 
@@ -35,6 +37,7 @@ const ac = 'À COMPLÉTER'
       <li>Ton compte, ton profil, tes saisies, ton agenda, ta trésorerie et tes réglages de rappels : jusqu'à ce que tu supprimes ton compte.</li>
       <li>Ta connexion Stripe : jusqu'à ce que tu la déconnectes ou que tu supprimes ton compte.</li>
       <li>Ta clé Qonto : jusqu'à ce que tu la déconnectes. Les opérations lues sont gardées, pour ne jamais les réimporter, jusqu'à la suppression de ton compte.</li>
+      <li>Ta connexion Gmail : jusqu'à ce que tu la déconnectes. La copie des mails est remplacée toutes les 5 minutes et ne garde que les 14 derniers jours.</li>
       <li>Ta session de connexion : 30 jours au plus, ou jusqu'à ce que tu te déconnectes.</li>
       <li>Les journaux techniques du serveur (adresse IP, page demandée) : <span class="a-completer">[{{ ac }} : durée]</span>.</li>
     </ul>

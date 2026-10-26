@@ -24,6 +24,7 @@ import (
 	"github.com/arysis/microdash/api/internal/modules"
 	"github.com/arysis/microdash/api/internal/modules/agenda"
 	"github.com/arysis/microdash/api/internal/modules/finances"
+	"github.com/arysis/microdash/api/internal/modules/mails"
 	"github.com/arysis/microdash/api/internal/modules/taches"
 	"github.com/arysis/microdash/api/internal/store"
 )
@@ -83,15 +84,20 @@ func run() error {
 			return fmt.Errorf("CLE_CHIFFREMENT : %w", err)
 		}
 	} else {
-		slog.Info("connexions Stripe et Qonto désactivées : CLE_CHIFFREMENT vide")
+		slog.Info("connexions Stripe, Qonto et Gmail désactivées : CLE_CHIFFREMENT vide")
 	}
 	api.StripeURL = os.Getenv("STRIPE_API_URL") // tests uniquement : faux serveur Stripe
 	api.QontoURL = os.Getenv("QONTO_API_URL")   // tests uniquement : faux serveur Qonto
+	api.Mails = &mails.Module{Donnees: st, Cle: api.Chiffre, Boite: mails.Gmail{}, Paris: alertes.Paris}
 	api.Modules = modules.NewRegistre(
 		finances.Module{Donnees: st, Baremes: set},
 		taches.Module{Donnees: st, Aujourdhui: func() time.Time { return alertes.Aujourdhui(time.Now()) }},
 		agenda.Module{Donnees: st},
+		api.Mails,
 	)
+	if api.Chiffre != nil {
+		go api.Mails.Planifier(ctx)
+	}
 	go genererRecurrentes(ctx, st)
 
 	srv := &http.Server{

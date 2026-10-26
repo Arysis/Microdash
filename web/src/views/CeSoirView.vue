@@ -41,6 +41,8 @@ onMounted(charger)
 const elements = computed(() => donnees.value?.elements || [])
 const sources = computed(() => donnees.value?.sources || [])
 const nomSource = (code) => sources.value.find((s) => s.code === code)?.nom || code
+// Page de chaque module, ouverte depuis son compteur.
+const pages = { finances: '/tableau-de-bord', taches: '/taches', mails: '/mails' }
 const cle = (e) => `${e.source}/${e.ref}`
 const externe = (lien) => /^https?:\/\//.test(lien)
 
@@ -133,10 +135,10 @@ const metaTache = (t) => [nomProjet(t.projet), duree(t.duree_minutes)].filter(Bo
 
   <div class="pile-relief">
     <div v-if="sources.length" class="compteurs">
-      <div v-for="s in sources" :key="s.code" class="carte compteur">
+      <RouterLink v-for="s in sources" :key="s.code" :to="pages[s.code] || '/ce-soir'" class="carte compteur">
         <span class="aide">{{ s.nom }}</span>
         <strong :class="{ actif: s.nombre > 0 }">{{ s.nombre }}</strong>
-      </div>
+      </RouterLink>
     </div>
 
     <section v-if="soiree || rendezVous.length" class="carte liste-soir" aria-labelledby="titre-soiree">
@@ -213,7 +215,7 @@ const metaTache = (t) => [nomProjet(t.projet), duree(t.duree_minutes)].filter(Bo
 .bandeau p { color: var(--blanc); font-size: 15px; }
 .pile-relief { display: grid; gap: var(--e4); }
 .compteurs { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--e2); }
-.compteur { padding: var(--e3); display: grid; gap: 2px; }
+.compteur { padding: var(--e3); display: grid; gap: 2px; color: var(--encre); text-decoration: none; }
 .carte + .carte.compteur { margin-top: 0; }
 .compteur strong { font-size: 28px; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .compteur strong.actif { color: var(--safran); }
