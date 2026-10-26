@@ -76,8 +76,9 @@ func (s *Server) ceSoir(w http.ResponseWriter, r *http.Request) {
 	sources := []sourceJSON{}
 	indisponibles := []string{}
 	elements := []modules.Element{}
-	for _, m := range s.Modules.Modules() {
-		if inactifs[m.Code()] {
+	for _, mod := range s.Modules.Modules() {
+		m, ok := mod.(modules.Source)
+		if !ok || inactifs[m.Code()] {
 			continue
 		}
 		els, err := m.ATraiter(ctx, uid, aujourdhui)
@@ -126,7 +127,8 @@ func (s *Server) faitCeSoir(w http.ResponseWriter, r *http.Request) {
 	ctx, uid := r.Context(), userID(r.Context())
 	if f, ok := m.(modules.Finisseur); ok {
 		if err := f.Finir(ctx, uid, in.Ref); err != nil {
-			erreurInterne(w, r, err)
+			slog.Error("ce soir : fait", "module", m.Code(), "compte", uid, "err", err)
+			erreur(w, http.StatusBadGateway, m.Nom()+" : "+err.Error())
 			return
 		}
 	}

@@ -28,6 +28,7 @@ import (
 	"github.com/arysis/microdash/api/internal/chiffre"
 	"github.com/arysis/microdash/api/internal/exports"
 	"github.com/arysis/microdash/api/internal/modules"
+	"github.com/arysis/microdash/api/internal/modules/mails"
 	"github.com/arysis/microdash/api/internal/store"
 )
 
@@ -46,6 +47,7 @@ type Server struct {
 	StripeURL    string            // vide : API Stripe ; une autre adresse sert aux tests
 	QontoURL     string            // vide : API Qonto ; une autre adresse sert aux tests
 	Modules      *modules.Registre // modules du copilote, sources de « Ce soir »
+	Mails        *mails.Module     // module Mails : synchro et archivage Gmail
 	echecsStripe sync.Map          // compte → heure du dernier échec de lecture Stripe
 	now          func() time.Time
 }
@@ -64,6 +66,8 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/baremes/{annee}", s.getBareme)
 		// Lien signé des e-mails : la page l'appelle en JSON, une messagerie en POST de formulaire (RFC 8058).
 		r.Post("/alertes/desinscription", s.desinscription)
+		// Lien secret du flux iCal : Home Assistant et les calendriers le lisent sans session.
+		r.Get("/ical/{jeton}.ics", s.fluxICal)
 		r.Group(func(r chi.Router) {
 			r.Use(exigerJSON)
 			r.Post("/auth/register", s.register)
@@ -112,6 +116,26 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/ce-soir", s.ceSoir)
 			r.Post("/ce-soir/fait", s.faitCeSoir)
 			r.Post("/ce-soir/plus-tard", s.plusTardCeSoir)
+			r.Post("/ce-soir/tache", s.tacheCeSoir)
+			r.Get("/taches", s.listTaches)
+			r.Post("/taches", s.createTache)
+			r.Put("/taches/{id}", s.updateTache)
+			r.Delete("/taches/{id}", s.deleteTache)
+			r.Get("/calendrier", s.getCalendrier)
+			r.Get("/calendrier/flux", s.getFlux)
+			r.Post("/calendrier/flux", s.changerFlux)
+			r.Delete("/calendrier/flux", s.supprimerFlux)
+			r.Post("/evenements", s.createEvenement)
+			r.Put("/evenements/{id}", s.updateEvenement)
+			r.Delete("/evenements/{id}", s.deleteEvenement)
+			r.Get("/mails", s.getMails)
+			r.Put("/mails/connexion", s.putConnexionMail)
+			r.Delete("/mails/connexion", s.deleteConnexionMail)
+			r.Put("/mails/important-gmail", s.putImportantGmail)
+			r.Post("/mails/synchroniser", s.synchroMails)
+			r.Post("/mails/{ref}/archiver", s.archiverMail)
+			r.Post("/mails/regles", s.createRegleMail)
+			r.Delete("/mails/regles/{id}", s.deleteRegleMail)
 		})
 	})
 	return r

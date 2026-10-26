@@ -15,20 +15,46 @@ type Element struct {
 	Ref        string `json:"ref"`    // identifiant stable dans le module
 	Titre      string `json:"titre"`
 	Detail     string `json:"detail,omitempty"`
-	Date       string `json:"date,omitempty"` // AAAA-MM-JJ : date limite ou de réception
-	Importance int    `json:"importance"`     // 0 normal, 1 important, 2 urgent
-	Lien       string `json:"lien,omitempty"` // page de l'app (/agenda) ou adresse externe (https://…)
-	Finir      bool   `json:"finir"`          // vrai si « Fait » a un sens pour cet élément
+	Date       string `json:"date,omitempty"`   // AAAA-MM-JJ : date limite ou de réception
+	Limite     bool   `json:"limite,omitempty"` // vrai si Date est une date limite
+	Importance int    `json:"importance"`       // 0 normal, 1 important, 2 urgent
+	Lien       string `json:"lien,omitempty"`   // page de l'app (/agenda) ou adresse externe (https://…)
+	Finir      bool   `json:"finir"`            // vrai si « Fait » a un sens pour cet élément
 }
 
 // Cle identifie un élément parmi toutes les sources.
 func (e Element) Cle() string { return e.Source + "/" + e.Ref }
 
-// Module est une source d'éléments à traiter.
+// Module est une partie du copilote qu'on peut activer ou désactiver.
 type Module interface {
 	Code() string
 	Nom() string
+}
+
+// Source est un module qui met des éléments dans « Ce soir ».
+type Source interface {
+	Module
 	ATraiter(ctx context.Context, userID int64, aujourdhui time.Time) ([]Element, error)
+}
+
+// Evenement est une chose datée, montrée dans l'agenda et dans le flux iCal.
+type Evenement struct {
+	Source string `json:"source"`
+	Ref    string `json:"ref"`
+	Titre  string `json:"titre"`
+	Date   string `json:"date"`            // AAAA-MM-JJ
+	Heure  string `json:"heure,omitempty"` // HH:MM, heure de Paris ; vide : toute la journée
+	Duree  int    `json:"duree,omitempty"` // minutes, pour un événement à heure fixe
+	Notes  string `json:"notes,omitempty"`
+	Type   string `json:"type"` // evenement, tache, echeance
+	Fait   bool   `json:"fait,omitempty"`
+	Lien   string `json:"lien,omitempty"`
+}
+
+// Calendrier est un module qui place des choses dans l'agenda.
+type Calendrier interface {
+	Module
+	Evenements(ctx context.Context, userID int64, du, au time.Time) ([]Evenement, error)
 }
 
 // Finisseur est un module qui agit quand la personne marque un de ses éléments « Fait »

@@ -270,7 +270,7 @@ func (s *Service) autorise(email string) bool {
 func (s *Service) pied(userID int64) (texte, unClic string) {
 	jeton := s.Signature.Jeton(userID)
 	page := s.AppURL + "/desinscription?jeton=" + jeton
-	texte = fmt.Sprintf("\nTon agenda : %s/agenda\n\n--\nTu reçois cet e-mail parce que les rappels sont activés dans ton compte Microdash. Pour ne plus en recevoir : %s\n", s.AppURL, page)
+	texte = fmt.Sprintf("\nTes échéances : %s/echeances\n\n--\nTu reçois cet e-mail parce que les rappels sont activés dans ton compte Microdash. Pour ne plus en recevoir : %s\n", s.AppURL, page)
 	return texte, s.AppURL + "/api/alertes/desinscription?jeton=" + jeton
 }
 
