@@ -106,7 +106,7 @@ func (m Module) compte(c *store.ConnexionMail, uid int64) (gmail.Compte, error) 
 	}
 	mdp, err := m.Cle.Dechiffrer(c.MotDePasse, ContexteCle(uid))
 	if err != nil {
-		return gmail.Compte{}, err
+		return gmail.Compte{}, errors.New("mot de passe d'application illisible (CLE_CHIFFREMENT a changé ?) : reconnecte Gmail dans Réglages")
 	}
 	return gmail.Compte{Email: c.Email, MotDePasse: string(mdp)}, nil
 }

@@ -193,7 +193,7 @@ const metaTache = (t) => [nomProjet(t.projet), duree(t.duree_minutes)].filter(Bo
             <button class="bouton secondaire" @click="choixOuvert = null">Annuler</button>
           </div>
           <div v-else-if="ouvert(e, 'tache')" class="actions" role="group" :aria-label="`Ranger « ${e.titre} » dans les tâches`">
-            <button v-for="l in listes" :key="l.quand" class="bouton secondaire" :disabled="enCours === cle(e)" @click="enTache(e, l.quand)">{{ l.nom }}</button>
+            <button v-for="l in listes" :key="l.quand" class="bouton secondaire" :disabled="enCours === cle(e)" @click="enTache(e, l.quand)">{{ l.court || l.nom }}</button>
             <button class="bouton secondaire" @click="choixOuvert = null">Annuler</button>
           </div>
           <div v-else class="actions">
@@ -231,7 +231,7 @@ const metaTache = (t) => [nomProjet(t.projet), duree(t.duree_minutes)].filter(Bo
 .retard { color: var(--brique); font-weight: 600; }
 .titre { font-weight: 600; }
 .actions { display: flex; flex-wrap: wrap; gap: var(--e2); margin-top: var(--e2); }
-.actions .bouton { flex: 1 1 0; min-width: 72px; padding: 0 var(--e2); font-size: 14px; }
+.actions .bouton { flex: 1 1 0; min-width: 64px; padding: 0 6px; font-size: 14px; white-space: nowrap; }
 .liste-soir .titre-ligne { margin-bottom: var(--e2); }
 .liste-soir .titre-ligne h2 { margin: 0; }
 .liste-soir li.tache { padding: 0; }

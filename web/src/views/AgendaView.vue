@@ -56,11 +56,15 @@ const jours = computed(() => {
 
 const titrePeriode = computed(() => {
   const d = lire(ancre.value)
-  if (vue.value === 'mois') return `${moisNoms[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+  if (vue.value === 'mois') {
+    const m = moisNoms[d.getUTCMonth()]
+    return `${m[0].toUpperCase()}${m.slice(1)} ${d.getUTCFullYear()}`
+  }
   const du = lire(periode.value.du)
   const au = lire(periode.value.au)
-  const debut = du.getUTCMonth() === au.getUTCMonth() ? du.getUTCDate() : `${du.getUTCDate()} ${moisNoms[du.getUTCMonth()]}`
-  return `Du ${debut} au ${au.getUTCDate()} ${moisNoms[au.getUTCMonth()]}`
+  const n = (d) => (d.getUTCDate() === 1 ? '1er' : d.getUTCDate())
+  const debut = du.getUTCMonth() === au.getUTCMonth() ? n(du) : `${n(du)} ${moisNoms[du.getUTCMonth()]}`
+  return `Du ${debut} au ${n(au)} ${moisNoms[au.getUTCMonth()]}`
 })
 
 async function charger() {
@@ -112,7 +116,7 @@ function libelleJour(j) {
 }
 
 function horaire(e) {
-  if (!e.heure) return 'Journée'
+  if (!e.heure) return e.type === 'evenement' ? 'Journée' : ''
   return e.duree ? `${e.heure} · ${duree(e.duree)}` : e.heure
 }
 
@@ -358,10 +362,10 @@ async function couperLien() {
 
 .semaine { padding-top: var(--e2); padding-bottom: var(--e2); }
 .jour { list-style: none; margin: 0; padding: 0; }
-.semaine .jour { display: grid; grid-template-columns: 76px 1fr; gap: var(--e2); padding: var(--e2) 0; border-bottom: 1px solid var(--lin); }
+.semaine .jour { display: grid; grid-template-columns: 92px 1fr; gap: var(--e2); padding: var(--e2) 0; border-bottom: 1px solid var(--lin); }
 .semaine .jour:last-child { border-bottom: 0; }
 .semaine ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.nom-jour { font: 600 14px var(--police-texte); color: var(--pierre); margin: 0; padding-top: 12px; }
+.nom-jour { font: 600 14px var(--police-texte); color: var(--pierre); margin: 0; padding-top: 12px; white-space: nowrap; }
 .aujourdhui .nom-jour { color: var(--safran); }
 .entree {
   width: 100%; min-height: 44px; display: grid; grid-template-columns: 10px auto 1fr; align-items: center; gap: var(--e2);

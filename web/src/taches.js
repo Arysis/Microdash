@@ -9,7 +9,7 @@ export const nomProjet = (code) => projets.find((p) => p.code === code)?.nom || 
 
 export const listes = [
   { quand: 'ce_soir', nom: 'Ce soir' },
-  { quand: 'semaine', nom: 'Cette semaine' },
+  { quand: 'semaine', nom: 'Cette semaine', court: 'Semaine' },
   { quand: 'plus_tard', nom: 'Plus tard' },
 ]
 

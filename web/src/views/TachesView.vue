@@ -134,7 +134,7 @@ async function supprimer(t) {
         <button class="bouton principal" :disabled="ajout || !nouvelle.texte.trim()">Ajouter</button>
       </div>
       <div class="bascule" role="group" aria-label="Liste de la nouvelle tâche">
-        <button v-for="l in listes" :key="l.quand" type="button" :class="{ actif: nouvelle.quand === l.quand }" :aria-pressed="nouvelle.quand === l.quand" @click="nouvelle.quand = l.quand">{{ l.nom }}</button>
+        <button v-for="l in listes" :key="l.quand" type="button" :class="{ actif: nouvelle.quand === l.quand }" :aria-pressed="nouvelle.quand === l.quand" @click="nouvelle.quand = l.quand">{{ l.court || l.nom }}</button>
       </div>
       <p class="aide">Une durée à la fin (15 min, 1 h 30) est comptée dans ta soirée.<template v-if="filtre"> La tâche va dans {{ nomProjet(filtre) }}.</template></p>
     </form>
