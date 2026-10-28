@@ -10,6 +10,8 @@ const route = useRoute()
 const miseEnPageApp = computed(() => route.meta.acces === 'membre')
 // Les écrans principaux (meta.relief) ont un bandeau sarcelle et des cartes ombrées.
 const relief = computed(() => Boolean(route.meta.relief))
+// Les pages qui ont besoin de place (le calendrier du mois) s'élargissent sur grand écran.
+const large = computed(() => Boolean(route.meta.large))
 const annee = new Date().getFullYear()
 const icone = { size: 24, 'stroke-width': 1.75, 'aria-hidden': 'true' }
 // Onglet allumé pour les pages d'un groupe (Finances : trois pages, Plus : compte et réglages).
@@ -27,7 +29,7 @@ const groupe = computed(() => route.meta.groupe)
         <RouterLink to="/echeances">Échéances</RouterLink>
       </nav>
     </header>
-    <main class="contenu-app">
+    <main :class="['contenu-app', { large }]">
       <RouterView />
     </main>
     <nav v-if="session.user?.profil_complet" class="onglets" aria-label="Navigation principale">
@@ -90,6 +92,7 @@ const groupe = computed(() => route.meta.groupe)
 .entete-app.relief .sous-onglets a { color: var(--blanc); background: var(--sur-sarcelle); }
 .entete-app.relief .sous-onglets a.router-link-active { background: var(--blanc); color: var(--sarcelle); font-weight: 600; }
 .contenu-app { max-width: 640px; margin: 0 auto; padding: var(--e5) var(--e4) calc(96px + env(safe-area-inset-bottom)); }
+.contenu-app.large { max-width: 1080px; }
 
 .onglets {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 2;

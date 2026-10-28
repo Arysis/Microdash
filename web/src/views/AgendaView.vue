@@ -32,7 +32,22 @@ const localAujourdhui = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-const vue = ref('semaine')
+// Vue Mois par défaut ; le choix est gardé dans ce navigateur.
+const lireVue = () => {
+  try {
+    return localStorage.getItem('agenda-vue') === 'semaine' ? 'semaine' : 'mois'
+  } catch {
+    return 'mois'
+  }
+}
+const vue = ref(lireVue())
+watch(vue, (v) => {
+  try {
+    localStorage.setItem('agenda-vue', v)
+  } catch {
+    // stockage indisponible : le choix vaut pour cette visite
+  }
+})
 const aujourdhui = ref(localAujourdhui())
 const ancre = ref(aujourdhui.value)
 const jourChoisi = ref(aujourdhui.value)
@@ -102,6 +117,10 @@ const parJour = computed(() => {
   return res
 })
 const dansLeMois = (j) => j.slice(0, 7) === ancre.value.slice(0, 7)
+// Au plus 3 entrées par case ; au-delà, « +N » ouvre le détail du jour.
+const parCase = 3
+const visibles = (j) => (parJour.value[j] || []).slice(0, parCase)
+const enPlus = (j) => Math.max((parJour.value[j] || []).length - parCase, 0)
 
 const types = {
   evenement: { nom: 'Rendez-vous', couleur: 'var(--sarcelle)' },
@@ -278,19 +297,29 @@ async function couperLien() {
     <template v-else>
       <section class="carte mois" aria-label="Mois">
         <div class="grille">
-          <span v-for="n in joursCourts" :key="n" class="entete-jour" aria-hidden="true">{{ n.slice(0, 1) }}</span>
-          <button
+          <span v-for="n in joursCourts" :key="n" class="entete-jour" aria-hidden="true">{{ n }}</span>
+          <div
             v-for="j in jours" :key="j"
             :class="['case-jour', { hors: !dansLeMois(j), aujourdhui: j === aujourdhui, choisi: j === jourChoisi }]"
-            :aria-label="`${dateLongue(j)}, ${(parJour[j] || []).length} élément(s)`"
-            :aria-pressed="j === jourChoisi"
             @click="jourChoisi = j"
           >
-            <span>{{ Number(j.slice(8)) }}</span>
-            <span class="points" aria-hidden="true">
-              <span v-for="e in (parJour[j] || []).slice(0, 3)" :key="`${e.source}/${e.ref}`" class="point" :style="{ background: types[e.type]?.couleur }" />
-            </span>
-          </button>
+            <button
+              class="numero"
+              :aria-label="`${dateLongue(j)}, ${(parJour[j] || []).length} élément(s)`"
+              :aria-pressed="j === jourChoisi"
+              @click.stop="jourChoisi = j"
+            >{{ Number(j.slice(8)) }}</button>
+            <button
+              v-for="e in visibles(j)" :key="`${e.source}/${e.ref}`"
+              :class="['puce', { fait: e.fait }]"
+              :style="{ '--couleur': types[e.type]?.couleur }"
+              :title="[e.heure, e.titre].filter(Boolean).join(' · ')"
+              @click.stop="ouvrir(e)"
+            >
+              <span v-if="e.heure" class="heure">{{ e.heure }}</span>{{ e.titre }}<span class="sr-only"> ({{ types[e.type]?.nom }}{{ e.fait ? ', fait' : '' }})</span>
+            </button>
+            <button v-if="enPlus(j)" class="plus" @click.stop="jourChoisi = j">+{{ enPlus(j) }}</button>
+          </div>
         </div>
       </section>
       <section class="carte" aria-labelledby="titre-jour">
@@ -377,17 +406,42 @@ async function couperLien() {
 .libre { min-height: 44px; background: none; border: 0; text-align: left; color: var(--pierre); font: 400 14px var(--police-texte); cursor: pointer; }
 .libre:hover { color: var(--safran); }
 
-.grille { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-.entete-jour { text-align: center; font-size: 12px; color: var(--pierre); font-weight: 600; padding-bottom: var(--e1); }
-.case-jour {
-  min-height: 48px; display: grid; justify-items: center; align-content: start; gap: 2px; padding-top: var(--e1);
-  background: none; border: 1px solid transparent; border-radius: var(--rayon); font: 500 15px var(--police-texte); color: var(--encre); cursor: pointer;
+.mois { padding: var(--e2); }
+.grille { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--lin); border-left: 1px solid var(--lin); }
+.entete-jour {
+  text-align: center; font-size: 12px; color: var(--pierre); font-weight: 600; padding: var(--e1) 0;
+  border-right: 1px solid var(--lin); border-bottom: 1px solid var(--lin);
 }
-.case-jour.hors { color: var(--pierre); opacity: 0.5; }
-.case-jour.aujourdhui span:first-child { color: var(--safran); font-weight: 700; }
-.case-jour.choisi { border-color: var(--sarcelle); background: var(--sarcelle-clair); }
-.points { display: flex; gap: 2px; min-height: 6px; }
-.point { width: 6px; height: 6px; border-radius: 50%; }
+.case-jour {
+  min-height: 112px; display: flex; flex-direction: column; gap: 2px; padding: 2px 2px var(--e1); min-width: 0;
+  border-right: 1px solid var(--lin); border-bottom: 1px solid var(--lin); cursor: pointer;
+}
+.case-jour.hors { background: var(--papier); }
+.case-jour.hors .numero { color: var(--pierre); opacity: 0.6; }
+.case-jour.choisi { box-shadow: inset 0 0 0 2px var(--sarcelle); }
+.numero {
+  align-self: center; min-width: 28px; height: 28px; border-radius: 14px; border: 0; background: none; cursor: pointer;
+  font: 500 14px var(--police-texte); color: var(--encre); font-variant-numeric: tabular-nums;
+}
+.case-jour.aujourdhui .numero { background: var(--safran); color: var(--blanc); font-weight: 700; }
+.puce {
+  display: block; width: 100%; min-width: 0; padding: 2px 4px; border: 0; border-left: 3px solid var(--couleur);
+  border-radius: 3px; background: var(--papier); color: var(--encre); cursor: pointer; text-align: left;
+  font: 500 12px/1.3 var(--police-texte); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.puce:hover { background: var(--lin); }
+.puce .heure { color: var(--pierre); font-variant-numeric: tabular-nums; margin-right: 4px; }
+.puce.fait { text-decoration: line-through; color: var(--pierre); }
+.plus { align-self: flex-start; border: 0; background: none; padding: 0 4px; font: 600 12px var(--police-texte); color: var(--pierre); cursor: pointer; }
+.plus:hover { color: var(--sarcelle); }
+/* Téléphone : cases plus basses, titres seuls. */
+@media (max-width: 560px) {
+  .mois { padding: var(--e1); }
+  .case-jour { min-height: 76px; padding: 1px 1px var(--e1); }
+  .puce { font-size: 10px; padding: 1px 2px; border-left-width: 2px; }
+  .puce .heure { display: none; }
+  .numero { min-width: 24px; height: 24px; font-size: 13px; }
+}
 
 .legende { display: flex; flex-wrap: wrap; gap: var(--e4); font-size: 13px; color: var(--pierre); padding: 0 var(--e1); }
 .legende > span { display: inline-flex; align-items: center; gap: var(--e1); }
