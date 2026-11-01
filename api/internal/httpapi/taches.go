@@ -15,8 +15,6 @@ import (
 
 // --- Tâches ---
 
-var listesTaches = map[string]bool{"ce_soir": true, "semaine": true, "plus_tard": true}
-
 type tacheJSON struct {
 	store.Tache
 	Faite bool `json:"faite"`
@@ -28,7 +26,7 @@ func (s *Server) validerTache(w http.ResponseWriter, in *tacheJSON) bool {
 	in.Titre = strings.TrimSpace(in.Titre)
 	in.Notes = strings.TrimSpace(in.Notes)
 	if in.Quand == "" {
-		in.Quand = "semaine"
+		in.Quand = taches.Semaine
 	}
 	_, projetConnu := taches.Projets[in.Projet]
 	switch {
@@ -42,9 +40,12 @@ func (s *Server) validerTache(w http.ResponseWriter, in *tacheJSON) bool {
 		erreur(w, http.StatusBadRequest, "projet inconnu : educari, saas, microdash ou perso")
 	case in.Duree < 0 || in.Duree > 1440:
 		erreur(w, http.StatusBadRequest, "durée entre 1 minute et 24 heures")
-	case !listesTaches[in.Quand]:
-		erreur(w, http.StatusBadRequest, "liste inconnue : ce_soir, semaine ou plus_tard")
 	default:
+		var err error
+		if in.Debut, in.Fin, err = taches.Periode(in.Quand, in.Debut, in.Fin, s.aujourdhui()); err != nil {
+			erreur(w, http.StatusBadRequest, err.Error())
+			return false
+		}
 		if in.Echeance != "" {
 			if _, err := time.Parse(formatDate, in.Echeance); err != nil {
 				erreur(w, http.StatusBadRequest, "échéance invalide (AAAA-MM-JJ)")
@@ -163,11 +164,17 @@ func (s *Server) tacheCeSoir(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if in.Quand == "" {
-		in.Quand = "ce_soir"
+	// « Ce soir » : une tâche datée d'aujourd'hui ; « semaine » : la semaine en cours.
+	if in.Quand == "" || in.Quand == "ce_soir" {
+		in.Quand = taches.Dates
+	}
+	debut, fin, err := taches.Periode(in.Quand, "", "", s.aujourdhui())
+	if err != nil {
+		erreur(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	src, ok := m.(modules.Source)
-	if !ok || m.Code() == "taches" || !listesTaches[in.Quand] {
+	if !ok || m.Code() == "taches" {
 		erreur(w, http.StatusBadRequest, "élément inconnu")
 		return
 	}
@@ -188,7 +195,7 @@ func (s *Server) tacheCeSoir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t := store.Tache{
-		Titre: el.Titre, Notes: el.Detail, Quand: in.Quand,
+		Titre: el.Titre, Notes: el.Detail, Quand: in.Quand, Debut: debut, Fin: fin,
 		Source: el.Source, SourceRef: el.Ref, Lien: el.Lien,
 	}
 	if el.Limite {

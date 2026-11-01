@@ -14,7 +14,7 @@ const aides = {
   finances: 'Échéances URSSAF, plafonds et opérations Qonto à valider dans « Ce soir ». Onglet Finances.',
   agenda: 'Tes rendez-vous, avec les tâches datées et les échéances. Lien iCal pour Home Assistant.',
   mails: 'Tes mails non lus : les importants dans « Ce soir », la veille mise à part pour être résumée.',
-  taches: 'Tes listes Ce soir, Cette semaine et Plus tard, par projet. Les tâches arrivées à échéance passent dans « Ce soir ».',
+  taches: 'Tes tâches par dates, par semaine ou pour plus tard, par projet. Celles du jour vont dans « Ta soirée » et dans l’agenda.',
 }
 
 onMounted(async () => {
