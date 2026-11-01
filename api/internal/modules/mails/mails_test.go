@@ -16,6 +16,7 @@ type fausses struct {
 	connexion  *store.ConnexionMail
 	mails      []store.Mail
 	regles     []store.RegleMail
+	veille     []store.RegleVeille
 	erreur     string
 	supprimees []string
 }
@@ -26,6 +27,9 @@ func (f *fausses) ConnexionMail(context.Context, int64) (*store.ConnexionMail, e
 func (f *fausses) ComptesMail(context.Context) ([]int64, error)                 { return []int64{1}, nil }
 func (f *fausses) Mails(context.Context, int64) ([]store.Mail, error)           { return f.mails, nil }
 func (f *fausses) ReglesMail(context.Context, int64) ([]store.RegleMail, error) { return f.regles, nil }
+func (f *fausses) ReglesVeille(context.Context, int64) ([]store.RegleVeille, error) {
+	return f.veille, nil
+}
 func (f *fausses) Mail(_ context.Context, _ int64, ref string) (*store.Mail, error) {
 	for _, m := range f.mails {
 		if m.Ref == ref {
@@ -52,6 +56,7 @@ type fausseBoite struct {
 	err      error
 	compte   gmail.Compte
 	archives []string
+	lus      []string
 }
 
 func (b *fausseBoite) Lire(_ context.Context, c gmail.Compte, _ time.Time, _ bool) ([]gmail.Message, error) {
@@ -60,6 +65,10 @@ func (b *fausseBoite) Lire(_ context.Context, c gmail.Compte, _ time.Time, _ boo
 }
 func (b *fausseBoite) Archiver(_ context.Context, _ gmail.Compte, id string) error {
 	b.archives = append(b.archives, id)
+	return nil
+}
+func (b *fausseBoite) MarquerLus(_ context.Context, _ gmail.Compte, ids []string) error {
+	b.lus = append(b.lus, ids...)
 	return nil
 }
 
@@ -149,5 +158,54 @@ func TestSynchroRefusee(t *testing.T) {
 	els, _ := m.ATraiter(context.Background(), 1, time.Now())
 	if len(els) != 1 || els[0].Ref != refErreur || els[0].Finir {
 		t.Errorf("rappel d'erreur : %+v", els)
+	}
+}
+
+func TestVeille(t *testing.T) {
+	regles := []store.RegleVeille{{Motif: "@golangweekly.com"}, {Motif: "tldr@tldrnewsletter.com"}, {Motif: "Kubernetes"}}
+	cas := []struct {
+		m    store.Mail
+		oui  bool
+		quoi string
+	}{
+		{store.Mail{De: "peter@golangweekly.com"}, true, "domaine"},
+		{store.Mail{De: "tldr@tldrnewsletter.com"}, true, "adresse"},
+		{store.Mail{De: "autre@tldrnewsletter.com"}, false, "autre adresse du même domaine"},
+		{store.Mail{De: "x@y.fr", Sujet: "Nouveautés de kubernetes 1.40"}, true, "mot-clé dans le sujet"},
+		{store.Mail{De: "x@y.fr", DeNom: "KUBERNETES Blog"}, true, "mot-clé dans le nom"},
+		{store.Mail{De: "paul@client.fr", Sujet: "Devis"}, false, "mail ordinaire"},
+	}
+	for _, c := range cas {
+		if got := Veille(c.m, regles); got != c.oui {
+			t.Errorf("%s : %v, attendu %v", c.quoi, got, c.oui)
+		}
+	}
+}
+
+func TestSynchroVeille(t *testing.T) {
+	f := &fausses{veille: []store.RegleVeille{{Motif: "@golangweekly.com"}}}
+	b := &fausseBoite{msgs: []gmail.Message{
+		{MessageID: "a@x", De: "news@golangweekly.com", Sujet: "Go 1.30", Extrait: "court", Texte: "long texte", Important: true},
+		{MessageID: "b@x", De: "paul@client.fr", Sujet: "Devis", Extrait: "court", Texte: "long texte", Important: true},
+	}}
+	m := module(t, f, b)
+	if err := m.Synchroniser(context.Background(), 1, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if f.mails[0].Texte != "long texte" || f.mails[1].Texte != "" {
+		t.Errorf("seul le mail de veille garde son texte : %q / %q", f.mails[0].Texte, f.mails[1].Texte)
+	}
+	els, err := m.ATraiter(context.Background(), 1, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(els) != 1 || els[0].Titre != "Devis" {
+		t.Errorf("« Ce soir » ne montre pas la veille : %+v", els)
+	}
+	if err := m.MarquerLus(context.Background(), 1, []string{Ref("a@x"), "m-inconnu"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(b.lus) != 1 || b.lus[0] != "a@x" || len(f.supprimees) != 1 || f.supprimees[0] != Ref("a@x") {
+		t.Errorf("marqués lus %v, retirés %v", b.lus, f.supprimees)
 	}
 }

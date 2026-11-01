@@ -82,6 +82,7 @@ type Mail struct {
 	DeNom          string    `json:"expediteur_nom,omitempty"`
 	Sujet          string    `json:"sujet"`
 	Extrait        string    `json:"extrait,omitempty"`
+	Texte          string    `json:"texte,omitempty"` // mails de veille seulement
 	Recu           time.Time `json:"recu_le"`
 	Lu             bool      `json:"lu"`
 	ImportantGmail bool      `json:"-"`
@@ -94,9 +95,9 @@ func (s *Store) RemplacerMails(ctx context.Context, userID int64, mails []Mail, 
 			return err
 		}
 		for _, m := range mails {
-			if _, err := tx.Exec(ctx, `INSERT INTO mails (user_id, ref, message_id, expediteur, expediteur_nom, sujet, extrait, recu_le, lu, important_gmail)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING`,
-				userID, m.Ref, m.MessageID, m.De, m.DeNom, m.Sujet, m.Extrait, m.Recu, m.Lu, m.ImportantGmail); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO mails (user_id, ref, message_id, expediteur, expediteur_nom, sujet, extrait, texte, recu_le, lu, important_gmail)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT DO NOTHING`,
+				userID, m.Ref, m.MessageID, m.De, m.DeNom, m.Sujet, m.Extrait, m.Texte, m.Recu, m.Lu, m.ImportantGmail); err != nil {
 				return err
 			}
 		}
@@ -110,11 +111,11 @@ func (s *Store) NoterErreurMail(ctx context.Context, userID int64, msg string) e
 	return err
 }
 
-const colonnesMail = `ref, message_id, expediteur, expediteur_nom, sujet, extrait, recu_le, lu, important_gmail`
+const colonnesMail = `ref, message_id, expediteur, expediteur_nom, sujet, extrait, texte, recu_le, lu, important_gmail`
 
 func scanMail(row pgx.Row) (*Mail, error) {
 	m := &Mail{}
-	err := row.Scan(&m.Ref, &m.MessageID, &m.De, &m.DeNom, &m.Sujet, &m.Extrait, &m.Recu, &m.Lu, &m.ImportantGmail)
+	err := row.Scan(&m.Ref, &m.MessageID, &m.De, &m.DeNom, &m.Sujet, &m.Extrait, &m.Texte, &m.Recu, &m.Lu, &m.ImportantGmail)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -180,6 +181,49 @@ func (s *Store) CreateRegleMail(ctx context.Context, userID int64, r RegleMail) 
 
 func (s *Store) DeleteRegleMail(ctx context.Context, userID, id int64) error {
 	tag, err := s.db.Exec(ctx, `DELETE FROM mails_regles WHERE id = $1 AND user_id = $2`, id, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// RegleVeille met à part pour la veille les mails d'une adresse ou d'un domaine, ou ceux dont
+// l'expéditeur ou le sujet contient un mot-clé.
+type RegleVeille struct {
+	ID    int64  `json:"id"`
+	Motif string `json:"motif"`
+}
+
+func (s *Store) ReglesVeille(ctx context.Context, userID int64) ([]RegleVeille, error) {
+	rows, err := s.db.Query(ctx, `SELECT id, motif FROM mails_veille WHERE user_id = $1 ORDER BY motif`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	res := []RegleVeille{}
+	for rows.Next() {
+		var r RegleVeille
+		if err := rows.Scan(&r.ID, &r.Motif); err != nil {
+			return nil, err
+		}
+		res = append(res, r)
+	}
+	return res, rows.Err()
+}
+
+// CreateRegleVeille ajoute une règle de veille ; une règle qui existe déjà garde son identifiant.
+func (s *Store) CreateRegleVeille(ctx context.Context, userID int64, motif string) (*RegleVeille, error) {
+	r := RegleVeille{Motif: motif}
+	err := s.db.QueryRow(ctx, `INSERT INTO mails_veille (user_id, motif) VALUES ($1, $2)
+		ON CONFLICT (user_id, motif) DO UPDATE SET motif = EXCLUDED.motif RETURNING id`, userID, motif).Scan(&r.ID)
+	return &r, err
+}
+
+func (s *Store) DeleteRegleVeille(ctx context.Context, userID, id int64) error {
+	tag, err := s.db.Exec(ctx, `DELETE FROM mails_veille WHERE id = $1 AND user_id = $2`, id, userID)
 	if err != nil {
 		return err
 	}

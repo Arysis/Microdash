@@ -1,6 +1,7 @@
 // Package mails est le module Mails du copilote : il copie régulièrement l'enveloppe des mails
-// récents de la boîte de réception Gmail, et met les mails importants dans « Ce soir ».
-// « Fait » archive le mail dans Gmail.
+// non lus récents de la boîte de réception Gmail, et met les mails importants dans « Ce soir ».
+// « Fait » archive le mail dans Gmail. Les mails de veille sont mis à part, avec le début de
+// leur texte, pour être résumés, puis marqués lus.
 package mails
 
 import (
@@ -40,12 +41,14 @@ type Donnees interface {
 	RemplacerMails(ctx context.Context, userID int64, mails []store.Mail, le time.Time) error
 	NoterErreurMail(ctx context.Context, userID int64, msg string) error
 	ReglesMail(ctx context.Context, userID int64) ([]store.RegleMail, error)
+	ReglesVeille(ctx context.Context, userID int64) ([]store.RegleVeille, error)
 }
 
 // Boite lit et archive les mails ; gmail.Compte en est la version réelle.
 type Boite interface {
 	Lire(ctx context.Context, c gmail.Compte, depuis time.Time, avecImportant bool) ([]gmail.Message, error)
 	Archiver(ctx context.Context, c gmail.Compte, messageID string) error
+	MarquerLus(ctx context.Context, c gmail.Compte, messageIDs []string) error
 }
 
 // Gmail est la boîte réelle, en IMAP.
@@ -56,6 +59,9 @@ func (Gmail) Lire(ctx context.Context, c gmail.Compte, depuis time.Time, avecImp
 }
 func (Gmail) Archiver(ctx context.Context, c gmail.Compte, messageID string) error {
 	return c.Archiver(ctx, messageID)
+}
+func (Gmail) MarquerLus(ctx context.Context, c gmail.Compte, messageIDs []string) error {
+	return c.MarquerLus(ctx, messageIDs)
 }
 
 type Module struct {
@@ -100,6 +106,28 @@ func Important(m store.Mail, regles []store.RegleMail, avecGmail bool) (bool, st
 	return false, ""
 }
 
+// Veille dit si un mail va dans la veille : adresse exacte, domaine (@exemple.fr), ou
+// mot-clé présent dans l'expéditeur ou le sujet, sans tenir compte des majuscules.
+func Veille(m store.Mail, regles []store.RegleVeille) bool {
+	ou := strings.ToLower(m.DeNom + " " + m.De + " " + m.Sujet)
+	for _, r := range regles {
+		motif := strings.ToLower(r.Motif)
+		switch {
+		case strings.HasPrefix(motif, "@"):
+			if strings.HasSuffix(m.De, motif) {
+				return true
+			}
+		case strings.Contains(motif, "@"):
+			if m.De == motif {
+				return true
+			}
+		case strings.Contains(ou, motif):
+			return true
+		}
+	}
+	return false
+}
+
 func (m Module) compte(c *store.ConnexionMail, uid int64) (gmail.Compte, error) {
 	if m.Cle == nil {
 		return gmail.Compte{}, errors.New("connexion Gmail désactivée sur ce serveur (CLE_CHIFFREMENT manquante)")
@@ -111,8 +139,8 @@ func (m Module) compte(c *store.ConnexionMail, uid int64) (gmail.Compte, error) 
 	return gmail.Compte{Email: c.Email, MotDePasse: string(mdp)}, nil
 }
 
-// ATraiter renvoie les mails importants encore dans la boîte de réception, et un rappel si
-// la synchro échoue.
+// ATraiter renvoie les mails importants (hors veille) encore dans la boîte de réception, et un
+// rappel si la synchro échoue.
 func (m Module) ATraiter(ctx context.Context, uid int64, _ time.Time) ([]modules.Element, error) {
 	c, err := m.Donnees.ConnexionMail(ctx, uid)
 	if err != nil || c == nil {
@@ -133,9 +161,13 @@ func (m Module) ATraiter(ctx context.Context, uid int64, _ time.Time) ([]modules
 	if err != nil {
 		return nil, err
 	}
+	veille, err := m.Donnees.ReglesVeille(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
 	for _, mail := range ms {
 		imp, raison := Important(mail, regles, c.ImportantGmail)
-		if !imp {
+		if !imp || Veille(mail, veille) {
 			continue
 		}
 		res = append(res, modules.Element{
@@ -190,14 +222,7 @@ func (m Module) Finir(ctx context.Context, uid int64, ref string) error {
 
 // Archiver sort un mail de la boîte de réception Gmail.
 func (m Module) Archiver(ctx context.Context, uid int64, messageID string) error {
-	c, err := m.Donnees.ConnexionMail(ctx, uid)
-	if err != nil {
-		return err
-	}
-	if c == nil {
-		return errors.New("Gmail n'est pas connecté")
-	}
-	cpt, err := m.compte(c, uid)
+	cpt, err := m.compteConnecte(ctx, uid)
 	if err != nil {
 		return err
 	}
@@ -206,11 +231,61 @@ func (m Module) Archiver(ctx context.Context, uid int64, messageID string) error
 	return m.Boite.Archiver(ctx, cpt, messageID)
 }
 
-// Synchroniser recopie les mails des 14 derniers jours. Une erreur est aussi notée sur la
-// connexion, pour l'afficher.
+// MarquerLus marque ces mails comme lus dans Gmail et les retire de la copie : ils ne
+// reviendront pas, la synchro ne lisant que les non lus. Un mail déjà sorti de la copie est ignoré.
+func (m Module) MarquerLus(ctx context.Context, uid int64, refs []string) error {
+	var ids, gardes []string
+	for _, ref := range refs {
+		mail, err := m.Donnees.Mail(ctx, uid, ref)
+		if errors.Is(err, store.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		ids, gardes = append(ids, mail.MessageID), append(gardes, ref)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	cpt, err := m.compteConnecte(ctx, uid)
+	if err != nil {
+		return err
+	}
+	lctx, annuler := context.WithTimeout(ctx, 20*time.Second)
+	err = m.Boite.MarquerLus(lctx, cpt, ids)
+	annuler()
+	if err != nil {
+		return err
+	}
+	for _, ref := range gardes {
+		if err := m.Donnees.SupprimerMail(ctx, uid, ref); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m Module) compteConnecte(ctx context.Context, uid int64) (gmail.Compte, error) {
+	c, err := m.Donnees.ConnexionMail(ctx, uid)
+	if err != nil {
+		return gmail.Compte{}, err
+	}
+	if c == nil {
+		return gmail.Compte{}, errors.New("Gmail n'est pas connecté")
+	}
+	return m.compte(c, uid)
+}
+
+// Synchroniser recopie les mails non lus des 14 derniers jours ; seuls ceux de la veille gardent
+// le début de leur texte. Une erreur est aussi notée sur la connexion, pour l'afficher.
 func (m Module) Synchroniser(ctx context.Context, uid int64, maintenant time.Time) error {
 	c, err := m.Donnees.ConnexionMail(ctx, uid)
 	if err != nil || c == nil {
+		return err
+	}
+	veille, err := m.Donnees.ReglesVeille(ctx, uid)
+	if err != nil {
 		return err
 	}
 	cpt, err := m.compte(c, uid)
@@ -222,10 +297,14 @@ func (m Module) Synchroniser(ctx context.Context, uid int64, maintenant time.Tim
 		if err == nil {
 			copie := make([]store.Mail, 0, len(msgs))
 			for _, g := range msgs {
-				copie = append(copie, store.Mail{
+				mail := store.Mail{
 					Ref: Ref(g.MessageID), MessageID: g.MessageID, De: g.De, DeNom: g.DeNom,
 					Sujet: g.Sujet, Extrait: g.Extrait, Recu: g.Recu, Lu: g.Lu, ImportantGmail: g.Important,
-				})
+				}
+				if Veille(mail, veille) {
+					mail.Texte = g.Texte
+				}
+				copie = append(copie, mail)
 			}
 			return m.Donnees.RemplacerMails(ctx, uid, copie, maintenant)
 		}

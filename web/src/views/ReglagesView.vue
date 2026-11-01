@@ -13,7 +13,7 @@ const enPreparation = ['Support', 'CRM']
 const aides = {
   finances: 'Échéances URSSAF, plafonds et opérations Qonto à valider dans « Ce soir ». Onglet Finances.',
   agenda: 'Tes rendez-vous, avec les tâches datées et les échéances. Lien iCal pour Home Assistant.',
-  mails: 'Les mails importants de ta boîte Gmail dans « Ce soir ». « Fait » les archive.',
+  mails: 'Tes mails non lus : les importants dans « Ce soir », la veille mise à part pour être résumée.',
   taches: 'Tes listes Ce soir, Cette semaine et Plus tard, par projet. Les tâches arrivées à échéance passent dans « Ce soir ».',
 }
 
@@ -30,6 +30,7 @@ onMounted(async () => {
 const gmail = ref(null)
 const connexion = reactive({ email: '', mot_de_passe: '', important_gmail: true })
 const regle = reactive({ motif: '', libelle: '' })
+const motifVeille = ref('')
 const erreurGmail = ref('')
 const enCours = ref(false)
 
@@ -85,6 +86,17 @@ const supprimerRegle = (r) => appel(async () => {
   gmail.value.regles = gmail.value.regles.filter((x) => x.id !== r.id)
 })
 
+const ajouterVeille = () => appel(async () => {
+  const r = await api.post('/mails/veille', { motif: motifVeille.value })
+  gmail.value.veille = [...gmail.value.veille.filter((x) => x.id !== r.id), r].sort((a, b) => a.motif.localeCompare(b.motif))
+  motifVeille.value = ''
+})
+
+const supprimerVeille = (r) => appel(async () => {
+  await api.del(`/mails/veille/${r.id}`)
+  gmail.value.veille = gmail.value.veille.filter((x) => x.id !== r.id)
+})
+
 const heure = (iso) => new Date(iso).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
 async function changer(m, actif) {
@@ -138,7 +150,7 @@ async function changer(m, actif) {
         <p class="aide">
           Gmail demande un mot de passe d'application (la validation en deux étapes doit être activée sur ton compte Google).
           Crée-le sur <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">myaccount.google.com/apppasswords</a>, nomme-le « Microdash », puis colle-le ici.
-          Il est gardé chiffré. Le copilote lit l'expéditeur, le sujet et le début des mails des 14 derniers jours.
+          Il est gardé chiffré. Le copilote lit l'expéditeur, le sujet et le début des mails non lus des 14 derniers jours.
         </p>
         <label>Adresse Gmail <input v-model="connexion.email" type="email" autocomplete="email" required /></label>
         <label>Mot de passe d'application <input v-model="connexion.mot_de_passe" autocomplete="off" placeholder="abcd efgh ijkl mnop" required /></label>
@@ -162,6 +174,24 @@ async function changer(m, actif) {
           <label>Adresse ou domaine <input v-model="regle.motif" placeholder="@educari.fr" required /></label>
           <label>Nom (facultatif) <input v-model="regle.libelle" maxlength="60" placeholder="Ex. : Client" /></label>
         </div>
+        <button class="bouton secondaire" :disabled="enCours">Ajouter</button>
+      </form>
+    </section>
+
+    <section class="carte" aria-labelledby="titre-veille">
+      <h2 id="titre-veille">Veille</h2>
+      <p class="aide">
+        Les mails qui correspondent vont dans l'onglet Veille de Mails, pas dans « Ce soir » : tu les copies d'un coup pour que Claude les résume.
+        Un mot-clé est cherché dans l'expéditeur et le sujet.
+      </p>
+      <ul v-if="gmail.veille.length" class="regles">
+        <li v-for="r in gmail.veille" :key="r.id">
+          <span>{{ r.motif }}<small class="aide">{{ r.motif.startsWith('@') ? 'Domaine' : r.motif.includes('@') ? 'Adresse' : 'Mot-clé' }}</small></span>
+          <button class="lien-bouton danger" :aria-label="`Retirer ${r.motif}`" :disabled="enCours" @click="supprimerVeille(r)">Retirer</button>
+        </li>
+      </ul>
+      <form class="form-regle" @submit.prevent="ajouterVeille">
+        <label>Mot-clé, adresse ou domaine <input v-model="motifVeille" maxlength="100" placeholder="Ex. : golang, @tldrnewsletter.com" required /></label>
         <button class="bouton secondaire" :disabled="enCours">Ajouter</button>
       </form>
     </section>
