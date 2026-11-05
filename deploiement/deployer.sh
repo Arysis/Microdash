@@ -80,7 +80,9 @@ journal "Démarrage de $version…"
 docker compose up -d --remove-orphans
 
 # Le site répond-il ? L'API passe par le front, comme pour un visiteur.
+# WEB_PORT vaut 8080, ou 127.0.0.1:8080 derrière un proxy HTTPS : seul le port compte ici.
 port="$(valeur_env WEB_PORT)"
+port="${port##*:}"
 url="http://127.0.0.1:${port:-8080}/api/health"
 for _ in $(seq 1 30); do
   if curl -fsS -o /dev/null "$url"; then
