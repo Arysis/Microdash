@@ -19,16 +19,69 @@ Pour développer le front avec rechargement à chaud, garde la pile lancée puis
 
 ## Mettre en production (VPS avec Docker)
 
-1. Pousse un tag de version, par exemple `git tag v0.1.0 && git push origin v0.1.0`. La CI publie les images `ghcr.io/arysis/microdash-api` et `ghcr.io/arysis/microdash-web` avec ce tag.
-2. Sur le serveur, copie `compose.yaml` et un `.env` avec `MICRODASH_VERSION=v0.1.0`, `COOKIE_SECURE=true` et un vrai mot de passe de base.
-3. Lance `docker compose pull && docker compose up -d`.
+Tout se pilote depuis GitHub, téléphone compris, sans se connecter au serveur :
 
-Pour revenir en arrière, remets l'ancien tag dans `.env` et relance la commande. Si le dépôt est privé, connecte d'abord le serveur à ghcr.io avec `docker login ghcr.io`.
+1. Une fonctionnalité arrive sur une branche, avec sa **pull request**. La CI la vérifie (tests Go, build du front).
+2. Tu relis la PR et tu la **fusionnes** dans `main` (app GitHub : Pull requests › Merge).
+3. Le workflow **Déployer** vérifie à nouveau, publie les images `ghcr.io/arysis/microdash-api` et `-web` (version `sha-xxxxxxx`), puis **attend ton feu vert**. Tu reçois une notification : Actions › Déployer › **Review deployments** › production › **Approve and deploy**. Tant que tu n'approuves pas, rien ne change sur le serveur ; « Reject » abandonne cette version.
+4. Le serveur sauvegarde la base (10 dernières gardées dans `sauvegardes/`), installe la version, vérifie que le site répond, et revient tout seul à la précédente sinon. Le résultat s'affiche dans GitHub.
+
+**Revenir en arrière** : Actions › Déployer › Run workflow (branche `main`), avec dans « version » une version déjà publiée (ex. `sha-1a2b3c4`, visible dans l'historique des déploiements), puis approuver.
+
+**Sécurité** : GitHub se connecte avec une clé SSH qui ne peut lancer qu'une commande, `deploiement/deployer.sh` (« command= » dans `authorized_keys`) : même volée, elle ne donne ni terminal ni accès aux fichiers. Active la double authentification sur ton compte GitHub : c'est elle qui protège le bouton « Approve ».
+
+### Installation, une seule fois
+
+Exemple pour un VPS Ubuntu ou Debian ; les commandes `sudo` se lancent sur le VPS.
+
+1. **Docker** :
+
+   ```sh
+   curl -fsSL https://get.docker.com | sudo sh
+   ```
+
+2. **Un utilisateur dédié** et le dossier de l'app :
+
+   ```sh
+   sudo adduser --disabled-password --gecos "" microdash
+   sudo usermod -aG docker microdash
+   sudo mkdir -p /opt/microdash/deploiement && sudo chown -R microdash: /opt/microdash
+   ```
+
+3. **Les fichiers de l'app**, dans `/opt/microdash` (copiés du dépôt) : `compose.yaml`, `deploiement/deployer.sh` (le rendre exécutable : `chmod +x`), et un `.env` fait à partir de `.env.example` avec `COOKIE_SECURE=true`, un vrai `POSTGRES_PASSWORD`, `CLE_CHIFFREMENT` (`openssl rand -hex 32`) et `SITE_URL`. `MICRODASH_VERSION` est rempli par le premier déploiement. Garde une copie du `.env` en lieu sûr.
+
+   Ces deux fichiers ne sont pas mis à jour par les déploiements (la clé de GitHub ne peut pas écrire sur le serveur) : si une PR modifie `compose.yaml` ou `deployer.sh`, recopie-les à la main.
+
+4. **La clé de déploiement**, créée sur ton ordinateur :
+
+   ```sh
+   ssh-keygen -t ed25519 -N "" -C github-microdash -f microdash-deploiement
+   ```
+
+   Sur le VPS, mets la clé publique (`microdash-deploiement.pub`) dans `/home/microdash/.ssh/authorized_keys`, sur une seule ligne, précédée de ses restrictions :
+
+   ```
+   restrict,command="/opt/microdash/deploiement/deployer.sh" ssh-ed25519 AAAA… github-microdash
+   ```
+
+   Puis `sudo chmod 700 /home/microdash/.ssh && sudo chmod 600 /home/microdash/.ssh/authorized_keys && sudo chown -R microdash: /home/microdash/.ssh`. Test depuis ton ordinateur : `ssh -i microdash-deploiement microdash@IP_DU_VPS etat` affiche la version en ligne, et toute autre commande est refusée.
+
+5. **L'environnement GitHub** : Settings › Environments › New environment › `production`.
+   - Deployment protection rules : coche **Required reviewers** et ajoute-toi.
+   - Deployment branches and tags : **Selected branches**, ajoute `main`.
+   - Environment secrets : `DEPLOY_SSH_KEY` (tout le contenu du fichier `microdash-deploiement`, la clé privée) et `DEPLOY_KNOWN_HOSTS` (le résultat de `ssh-keyscan -t ed25519 IP_DU_VPS`).
+   - Environment variables : `DEPLOY_HOST` (IP ou nom du VPS), `DEPLOY_USER` (`microdash`), et `DEPLOY_PORT` si SSH n'écoute pas sur 22.
+
+   Supprime ensuite la clé privée de ton ordinateur : elle n'est plus utile qu'à GitHub.
+
+6. **Protéger `main`** : Settings › Rules › Rulesets › New branch ruleset, cible `main`, coche « Require a pull request before merging » et « Require status checks to pass » (`api`, `web`). Plus rien n'arrive sur `main`, donc sur le serveur, sans passer par une PR.
+
+7. **Premier déploiement** : Actions › Déployer › Run workflow sur `main`, puis approuver.
 
 ### Domaine et HTTPS
 
 1. Achète le domaine, puis crée deux enregistrements DNS de type A, `mondomaine.fr` et `www.mondomaine.fr`, vers l'adresse IP du VPS.
-2. Dans les variables du dépôt GitHub (Settings > Secrets and variables > Actions > Variables), crée `SITE_URL` avec `https://www.mondomaine.fr`. Les images publiées par la CI s'en servent pour l'image de partage et l'adresse canonique. Pousse ensuite un nouveau tag.
+2. Dans les variables du dépôt GitHub (Settings > Secrets and variables > Actions > Variables), crée `SITE_URL` avec `https://www.mondomaine.fr`. Les images publiées par la CI s'en servent pour l'image de partage et l'adresse canonique. Lance ensuite un nouveau déploiement.
 3. Installe Caddy sur le VPS. Il obtient et renouvelle seul les certificats HTTPS. Exemple de `Caddyfile`, qui redirige le domaine nu vers `www` :
 
 ```
@@ -43,7 +96,7 @@ www.mondomaine.fr {
 
 Remplace `8080` par ton `WEB_PORT`, et garde `COOKIE_SECURE=true` dans le `.env`.
 
-Sauvegarde de la base : `docker compose exec db pg_dump -U microdash microdash > sauvegarde.sql`.
+Sauvegarde de la base : chaque déploiement en fait une dans `/opt/microdash/sauvegardes/`. À la main : `docker compose exec db pg_dump -U microdash microdash > sauvegarde.sql`. Pour restaurer : `gunzip -c sauvegardes/FICHIER.sql.gz | docker compose exec -T db psql -U microdash microdash` (sur une base vide).
 
 ## Ce soir et les modules
 
