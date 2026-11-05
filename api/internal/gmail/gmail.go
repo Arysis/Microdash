@@ -24,8 +24,11 @@ import (
 // Adresse du serveur IMAP de Gmail.
 const Adresse = "imap.gmail.com:993"
 
-// Octets lus au début de chaque mail pour l'extrait.
-const debutLu = 16 * 1024
+// Octets lus au début de chaque mail pour l'extrait et le texte.
+const debutLu = 64 * 1024
+
+// TexteMax : caractères gardés du texte d'un mail (pour la veille).
+const TexteMax = 4000
 
 // ErrIdentifiants : Gmail refuse l'adresse ou le mot de passe d'application.
 var ErrIdentifiants = errors.New("Gmail refuse l'adresse ou le mot de passe d'application")
@@ -37,6 +40,7 @@ type Message struct {
 	DeNom     string
 	Sujet     string
 	Extrait   string
+	Texte     string // début du texte, au plus TexteMax caractères
 	Recu      time.Time
 	Lu        bool
 	Important bool // dans la boîte « Important » de Gmail
@@ -114,7 +118,7 @@ func boite(cl *imapclient.Client, attr imap.MailboxAttr) (string, error) {
 
 const attrImportant = imap.MailboxAttr(`\Important`)
 
-// Lire renvoie les mails de la boîte de réception reçus depuis la date donnée. avecImportant :
+// Lire renvoie les mails non lus de la boîte de réception reçus depuis la date donnée. avecImportant :
 // noter ceux que Gmail range dans « Important ».
 func (c Compte) Lire(ctx context.Context, depuis time.Time, avecImportant bool) ([]Message, error) {
 	var res []Message
@@ -134,7 +138,7 @@ func (c Compte) Lire(ctx context.Context, depuis time.Time, avecImportant bool) 
 		if _, err := cl.Select("INBOX", &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
 			return err
 		}
-		uids, err := chercher(cl, depuis)
+		uids, err := chercher(cl, depuis, true)
 		if err != nil || len(uids) == 0 {
 			return err
 		}
@@ -150,9 +154,10 @@ func (c Compte) Lire(ctx context.Context, depuis time.Time, avecImportant bool) 
 			if m.Envelope == nil {
 				continue
 			}
+			brut := m.FindBodySection(section)
 			msg := Message{
 				MessageID: m.Envelope.MessageID, Sujet: m.Envelope.Subject, Recu: m.InternalDate,
-				Extrait: Extrait(m.FindBodySection(section)),
+				Extrait: Extrait(brut), Texte: Texte(brut, TexteMax),
 			}
 			if len(m.Envelope.From) > 0 {
 				msg.De = strings.ToLower(m.Envelope.From[0].Addr())
@@ -174,8 +179,13 @@ func (c Compte) Lire(ctx context.Context, depuis time.Time, avecImportant bool) 
 	return res, err
 }
 
-func chercher(cl *imapclient.Client, depuis time.Time) ([]imap.UID, error) {
-	data, err := cl.UIDSearch(&imap.SearchCriteria{Since: depuis}, nil).Wait()
+// chercher renvoie les mails reçus depuis la date donnée ; nonLus : seulement ceux pas encore lus.
+func chercher(cl *imapclient.Client, depuis time.Time, nonLus bool) ([]imap.UID, error) {
+	critere := &imap.SearchCriteria{Since: depuis}
+	if nonLus {
+		critere.NotFlag = []imap.Flag{imap.FlagSeen}
+	}
+	data, err := cl.UIDSearch(critere, nil).Wait()
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +198,7 @@ func identifiants(cl *imapclient.Client, nom string, depuis time.Time) (map[stri
 	if _, err := cl.Select(nom, &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
 		return nil, err
 	}
-	uids, err := chercher(cl, depuis)
+	uids, err := chercher(cl, depuis, false)
 	if err != nil || len(uids) == 0 {
 		return res, err
 	}
@@ -233,15 +243,47 @@ func (c Compte) Archiver(ctx context.Context, messageID string) error {
 	})
 }
 
+// MarquerLus marque comme lus les mails de la boîte de réception qui ont ces Message-ID.
+// Un mail introuvable (archivé, supprimé) est ignoré.
+func (c Compte) MarquerLus(ctx context.Context, messageIDs []string) error {
+	if len(messageIDs) == 0 {
+		return nil
+	}
+	return c.avec(ctx, func(cl *imapclient.Client) error {
+		if _, err := cl.Select("INBOX", nil).Wait(); err != nil {
+			return err
+		}
+		var uids []imap.UID
+		for _, id := range messageIDs {
+			data, err := cl.UIDSearch(&imap.SearchCriteria{
+				Header: []imap.SearchCriteriaHeaderField{{Key: "Message-ID", Value: id}},
+			}, nil).Wait()
+			if err != nil {
+				return err
+			}
+			uids = append(uids, data.AllUIDs()...)
+		}
+		if len(uids) == 0 {
+			return nil
+		}
+		return cl.Store(imap.UIDSetNum(uids...), &imap.StoreFlags{
+			Op: imap.StoreFlagsAdd, Flags: []imap.Flag{imap.FlagSeen}, Silent: true,
+		}, nil).Close()
+	})
+}
+
 var (
 	balises = regexp.MustCompile(`(?s)<(style|script)[^>]*>.*?</(style|script)>|<[^>]+>`)
 	blancs  = regexp.MustCompile(`\s+`)
 	entites = strings.NewReplacer("&nbsp;", " ", "&amp;", "&", "&lt;", "<", "&gt;", ">", "&quot;", `"`, "&#39;", "'", "&rsquo;", "’", "&eacute;", "é", "&egrave;", "è", "&agrave;", "à")
 )
 
-// Extrait renvoie les 200 premiers caractères du texte d'un mail, à partir de son début brut
+// Extrait renvoie les 200 premiers caractères du texte d'un mail.
+func Extrait(brut []byte) string { return Texte(brut, 200) }
+
+// Texte renvoie au plus max caractères du texte d'un mail, à partir de son début brut
 // (en-têtes compris, éventuellement tronqué). Le texte brut est préféré au HTML.
-func Extrait(brut []byte) string {
+func Texte(brut []byte, max int) string {
 	if len(brut) == 0 {
 		return ""
 	}
@@ -260,21 +302,21 @@ func Extrait(brut []byte) string {
 			continue
 		}
 		type_, _, _ := h.ContentType()
-		b, _ := io.ReadAll(io.LimitReader(p.Body, 4096))
+		b, _ := io.ReadAll(io.LimitReader(p.Body, debutLu))
 		switch {
 		case type_ == "text/plain" && len(strings.TrimSpace(string(b))) > 0:
-			return couper(string(b))
+			return couper(string(b), max)
 		case type_ == "text/html" && html == "":
 			html = entites.Replace(balises.ReplaceAllString(string(b), " "))
 		}
 	}
-	return couper(html)
+	return couper(html, max)
 }
 
-func couper(s string) string {
+func couper(s string, max int) string {
 	s = strings.TrimSpace(blancs.ReplaceAllString(strings.ToValidUTF8(s, ""), " "))
-	if utf8.RuneCountInString(s) <= 200 {
+	if utf8.RuneCountInString(s) <= max {
 		return s
 	}
-	return strings.TrimSpace(string([]rune(s)[:199])) + "…"
+	return strings.TrimSpace(string([]rune(s)[:max-1])) + "…"
 }

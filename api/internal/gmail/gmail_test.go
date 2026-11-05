@@ -80,18 +80,38 @@ func TestLire(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(msgs) != 2 {
-		t.Fatalf("%d mails, attendu 2", len(msgs))
+	// Le premier mail est déjà lu : seul le second revient.
+	if len(msgs) != 1 {
+		t.Fatalf("%d mails, attendu 1 (les non lus)", len(msgs))
 	}
-	m := msgs[0]
-	if m.De != "paul@exemple.fr" || m.DeNom != "Paul Martin" || m.Sujet != "Devis révisé" || m.MessageID != "abc@exemple.fr" || !m.Lu {
-		t.Errorf("premier mail : %+v", m)
+	if m := msgs[0]; m.Extrait != "Jusqu’à -50 %" || m.Texte != m.Extrait || m.Lu || m.MessageID != "promo@boutique.fr" {
+		t.Errorf("mail HTML : %+v", m)
 	}
-	if m.Extrait != "Bonjour, voici le devis révisé." {
-		t.Errorf("extrait du texte brut : %q", m.Extrait)
+}
+
+func TestMarquerLus(t *testing.T) {
+	c := serveur(t)
+	ctx, annuler := context.WithTimeout(context.Background(), 10*time.Second)
+	defer annuler()
+	if err := c.MarquerLus(ctx, []string{"promo@boutique.fr", "inconnu@nulle.part"}); err != nil {
+		t.Fatal(err)
 	}
-	if msgs[1].Extrait != "Jusqu’à -50 %" || msgs[1].Lu {
-		t.Errorf("mail HTML : %+v", msgs[1])
+	msgs, err := c.Lire(ctx, time.Now().AddDate(0, 0, -14), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 0 {
+		t.Errorf("après MarquerLus, %d mails non lus", len(msgs))
+	}
+}
+
+func TestTexte(t *testing.T) {
+	if got := Texte([]byte(mailTexte), 200); got != "Bonjour, voici le devis révisé." {
+		t.Errorf("texte brut : %q", got)
+	}
+	long := "Subject: x\r\nContent-Type: text/plain\r\n\r\n" + strings.Repeat("mot ", 3000)
+	if got := []rune(Texte([]byte(long), TexteMax)); len(got) != TexteMax || got[len(got)-1] != '…' {
+		t.Errorf("texte long : %d caractères", len(got))
 	}
 }
 

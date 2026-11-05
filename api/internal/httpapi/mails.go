@@ -20,28 +20,33 @@ type mailJSON struct {
 	store.Mail
 	Sujet     string `json:"sujet"`
 	Important bool   `json:"important"`
+	Veille    bool   `json:"veille"`
 	Raison    string `json:"raison,omitempty"`
 	Lien      string `json:"lien"`
 }
 
 type mailsJSON struct {
-	Disponible     bool              `json:"disponible"` // le serveur sait chiffrer le mot de passe
-	Connecte       bool              `json:"connecte"`
-	Email          string            `json:"email,omitempty"`
-	ImportantGmail bool              `json:"important_gmail"`
-	SynchroLe      *time.Time        `json:"synchro_le,omitempty"`
-	Erreur         string            `json:"erreur,omitempty"`
-	Mails          []mailJSON        `json:"mails"`
-	Regles         []store.RegleMail `json:"regles"`
+	Disponible     bool                `json:"disponible"` // le serveur sait chiffrer le mot de passe
+	Connecte       bool                `json:"connecte"`
+	Email          string              `json:"email,omitempty"`
+	ImportantGmail bool                `json:"important_gmail"`
+	SynchroLe      *time.Time          `json:"synchro_le,omitempty"`
+	Erreur         string              `json:"erreur,omitempty"`
+	Mails          []mailJSON          `json:"mails"`
+	Regles         []store.RegleMail   `json:"regles"`
+	Veille         []store.RegleVeille `json:"veille"`
 }
 
 func (s *Server) etatMails(ctx context.Context, uid int64) (*mailsJSON, error) {
-	res := &mailsJSON{Disponible: s.Chiffre != nil, Mails: []mailJSON{}, Regles: []store.RegleMail{}}
+	res := &mailsJSON{Disponible: s.Chiffre != nil, Mails: []mailJSON{}, Regles: []store.RegleMail{}, Veille: []store.RegleVeille{}}
 	c, err := s.Store.ConnexionMail(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
 	if res.Regles, err = s.Store.ReglesMail(ctx, uid); err != nil {
+		return nil, err
+	}
+	if res.Veille, err = s.Store.ReglesVeille(ctx, uid); err != nil {
 		return nil, err
 	}
 	if c == nil {
@@ -54,7 +59,9 @@ func (s *Server) etatMails(ctx context.Context, uid int64) (*mailsJSON, error) {
 	}
 	for _, m := range ms {
 		imp, raison := mails.Important(m, res.Regles, c.ImportantGmail)
-		res.Mails = append(res.Mails, mailJSON{Mail: m, Sujet: mails.Sujet(m), Important: imp, Raison: raison, Lien: mails.LienGmail(m.MessageID)})
+		res.Mails = append(res.Mails, mailJSON{
+			Mail: m, Sujet: mails.Sujet(m), Important: imp, Veille: mails.Veille(m, res.Veille), Raison: raison, Lien: mails.LienGmail(m.MessageID),
+		})
 	}
 	return res, nil
 }
@@ -220,4 +227,91 @@ func (s *Server) deleteRegleMail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// marquerMailsLus marque des mails comme lus dans Gmail (la veille, une fois copiée pour être résumée).
+func (s *Server) marquerMailsLus(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Refs []string `json:"refs"`
+	}
+	if !lireJSON(w, r, &in) {
+		return
+	}
+	if len(in.Refs) == 0 || len(in.Refs) > 200 {
+		erreur(w, http.StatusBadRequest, "donne entre 1 et 200 mails")
+		return
+	}
+	ctx, uid := r.Context(), userID(r.Context())
+	if err := s.Mails.MarquerLus(ctx, uid, in.Refs); err != nil {
+		erreur(w, http.StatusBadGateway, "Gmail n'a pas marqué les mails comme lus : "+err.Error())
+		return
+	}
+	for _, ref := range in.Refs {
+		if err := s.Store.MarquerATraiter(ctx, uid, s.Mails.Code(), ref, nil); err != nil {
+			erreurInterne(w, r, err)
+			return
+		}
+	}
+	s.getMails(w, r)
+}
+
+// normaliserVeille accepte une adresse, un domaine (@exemple.fr) ou un mot-clé.
+func normaliserVeille(m string) (string, bool) {
+	m = strings.ToLower(strings.Join(strings.Fields(m), " "))
+	if strings.Contains(m, "@") {
+		return normaliserMotif(m)
+	}
+	n := len([]rune(m))
+	return m, n >= 2 && n <= 100
+}
+
+func (s *Server) createRegleVeille(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Motif string `json:"motif"`
+	}
+	if !lireJSON(w, r, &in) {
+		return
+	}
+	motif, ok := normaliserVeille(in.Motif)
+	if !ok {
+		erreur(w, http.StatusBadRequest, "écris un mot-clé (2 caractères au moins), une adresse (news@exemple.fr) ou un domaine (@exemple.fr)")
+		return
+	}
+	uid := userID(r.Context())
+	res, err := s.Store.CreateRegleVeille(r.Context(), uid, motif)
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	s.relireMails(uid)
+	ecrireJSON(w, http.StatusCreated, res)
+}
+
+func (s *Server) deleteRegleVeille(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r)
+	if !ok {
+		return
+	}
+	uid := userID(r.Context())
+	err := s.Store.DeleteRegleVeille(r.Context(), uid, id)
+	if errors.Is(err, store.ErrNotFound) {
+		erreur(w, http.StatusNotFound, "règle introuvable")
+		return
+	}
+	if err != nil {
+		erreurInterne(w, r, err)
+		return
+	}
+	s.relireMails(uid)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// relireMails relance une synchro en arrière-plan : les mails déjà copiés suivent les nouvelles
+// règles de veille (texte gardé ou non) sans attendre les 5 minutes.
+func (s *Server) relireMails(uid int64) {
+	go func() {
+		ctx, annuler := context.WithTimeout(context.Background(), time.Minute)
+		defer annuler()
+		_ = s.Mails.Synchroniser(ctx, uid, s.now())
+	}()
 }

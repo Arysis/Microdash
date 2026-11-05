@@ -105,9 +105,9 @@ La page d'accueil de l'app est « Ce soir » : une seule liste de ce qui est à 
 Chaque source est un module (`api/internal/modules`). Un module donne son code, son nom et, s'il le veut, ses éléments à traiter (`Source`) et ce qu'il place dans l'agenda (`Calendrier`) ; le registre est monté dans `cmd/server/main.go`. Les modules :
 
 - **Finances** : les échéances URSSAF et fiscales 14 jours avant leur date (et jusqu'à 60 jours de retard), les plafonds à 80 % ou dépassés, et les opérations Qonto à valider. « Fait » sur une échéance la coche aussi dans la page Échéances.
-- **Tâches** : listes Ce soir, Cette semaine et Plus tard, par projet (Educari, SaaS, Microdash, perso). Une durée écrite à la fin (« Relancer Paul 15 min », « Compta 1 h 30 ») est comptée dans « Ta soirée ». Une tâche arrivée à échéance passe dans « À traiter ». Le bouton « Tâche » d'un élément de « Ce soir » le range dans les tâches ; cocher la tâche prévient son module d'origine (l'échéance est cochée, le mail archivé).
+- **Tâches** : par dates (du … au …), par semaine (du lundi au dimanche) ou Plus tard (sans date), par projet (Educari, SaaS, Microdash, perso). Une tâche datée est à faire chaque soir de sa période : elle s'affiche ces jours-là dans l'agenda et dans « Ta soirée ». Une durée écrite à la fin (« Relancer Paul 15 min », « Compta 1 h 30 ») est comptée dans « Ta soirée ». Une tâche arrivée à échéance passe dans « À traiter ». Le bouton « Tâche » d'un élément de « Ce soir » le range dans les tâches ; cocher la tâche prévient son module d'origine (l'échéance est cochée, le mail archivé).
 - **Agenda** : rendez-vous, avec les tâches datées et les échéances, en vue Semaine ou Mois. Les rendez-vous du jour s'affichent dans « Ta soirée ».
-- **Mails** : les mails importants de la boîte de réception Gmail (voir plus bas). « Fait » archive le mail.
+- **Mails** : les mails non lus de la boîte de réception Gmail (voir plus bas). Les importants vont dans « Ce soir » ; « Fait » archive le mail. La veille est mise à part pour être résumée.
 
 Chacun peut désactiver un module dans Plus › Réglages : il quitte « Ce soir » et le menu, ses données restent.
 
@@ -124,7 +124,11 @@ Le module lit Gmail en IMAP avec un **mot de passe d'application** Google, pas a
 3. Créer le mot de passe sur [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) (nom : « Microdash ») et copier les 16 lettres.
 4. Dans l'app : Plus › Réglages › Gmail, coller l'adresse et le mot de passe. Il est vérifié auprès de Gmail, puis chiffré avec `CLE_CHIFFREMENT` (obligatoire pour ce module).
 
-L'API relit la boîte de réception toutes les 5 minutes (et sur « Actualiser ») : expéditeur, sujet, date et les 200 premiers caractères des mails des 14 derniers jours. Les messages complets ne sont jamais copiés. Un mail est important s'il vient d'une adresse ou d'un domaine listé dans « Ce qui est important », ou si Gmail l'a rangé dans « Important » (désactivable). « Fait » ou « Archiver » sort le mail de la boîte de réception, comme le bouton Archiver de Gmail. Pour couper l'accès : déconnecter Gmail dans Réglages et supprimer le mot de passe d'application chez Google.
+L'API relit la boîte de réception toutes les 5 minutes (et sur « Actualiser ») : expéditeur, sujet, date et les 200 premiers caractères des mails **non lus** des 14 derniers jours. Un mail lu dans Gmail disparaît de Microdash à la lecture suivante. Les messages complets ne sont jamais copiés. Un mail est important s'il vient d'une adresse ou d'un domaine listé dans « Ce qui est important », ou si Gmail l'a rangé dans « Important » (désactivable). « Fait » ou « Archiver » sort le mail de la boîte de réception, comme le bouton Archiver de Gmail. Pour couper l'accès : déconnecter Gmail dans Réglages et supprimer le mot de passe d'application chez Google.
+
+**Veille.** Dans Réglages › Veille, des mots-clés (cherchés dans l'expéditeur et le sujet), des adresses ou des domaines. Les mails qui correspondent quittent « À regarder » et « Ce soir » pour l'onglet Veille, et eux seuls gardent le début de leur texte (4 000 caractères). « Copier pour Claude » copie ces mails avec une consigne de résumé, à coller dans Claude, puis les marque lus dans Gmail : ils sortent de Microdash.
+
+À venir : le résumé fait directement par l'API Claude, sans copier-coller.
 
 ## Rappels par e-mail (Resend)
 

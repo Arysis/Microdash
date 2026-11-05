@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watchEffect } from 'vue'
 import { api } from '../api.js'
 import { dateCourte, dateLongue } from '../echeances.js'
 import { moduleActif } from '../session.js'
-import { duree, listes, nomProjet } from '../taches.js'
+import { duree, enCours as prevueLe, nomProjet } from '../taches.js'
 
 const donnees = ref(null)
 const erreur = ref('')
@@ -13,6 +13,13 @@ const choixOuvert = ref(null)
 // Tâches rangées dans « Ce soir » (null : module Tâches désactivé) et rendez-vous du jour.
 const soiree = ref(null)
 const rendezVous = ref([])
+
+// Ranger un élément dans les tâches : ce soir (aujourd'hui), cette semaine, ou plus tard.
+const rangements = [
+  { quand: 'ce_soir', libelle: 'Ce soir' },
+  { quand: 'semaine', libelle: 'Cette semaine' },
+  { quand: 'plus_tard', libelle: 'Plus tard' },
+]
 
 const reports = [
   { quand: 'demain', libelle: 'Demain' },
@@ -30,7 +37,8 @@ async function charger() {
       moduleActif('agenda') ? api.get(`/calendrier?du=${j}&au=${j}`).catch(() => null) : null,
     ])
     donnees.value = cs
-    soiree.value = ts && ts.filter((t) => t.quand === 'ce_soir')
+    // Ta soirée : les tâches dont la période contient aujourd'hui.
+    soiree.value = ts && ts.filter((t) => prevueLe(t, j))
     rendezVous.value = (cal?.evenements || []).filter((e) => e.type === 'evenement')
   } catch (e) {
     erreur.value = e.message
@@ -105,9 +113,9 @@ async function decider(e, chemin, corps, apres) {
 
 const fait = (e) => decider(e, '/ce-soir/fait')
 const plusTard = (e, quand) => decider(e, '/ce-soir/plus-tard', { quand })
-// Range l'élément dans les tâches ; une tâche pour ce soir rejoint « Ta soirée ».
+// Range l'élément dans les tâches ; une tâche à faire ce soir rejoint « Ta soirée ».
 const enTache = (e, quand) => decider(e, '/ce-soir/tache', { quand }, (t) => {
-  if (t.quand === 'ce_soir' && soiree.value) soiree.value = [...soiree.value, t]
+  if (prevueLe(t, donnees.value.aujourdhui) && soiree.value) soiree.value = [...soiree.value, t]
 })
 
 async function cocher(t) {
@@ -117,7 +125,7 @@ async function cocher(t) {
   try {
     maj(await api.put(`/taches/${t.id}`, {
       titre: t.titre, notes: t.notes, projet: t.projet, duree_minutes: t.duree_minutes || 0,
-      quand: t.quand, echeance: t.echeance || '', faite: !t.faite,
+      quand: t.quand, debut: t.debut || '', fin: t.fin || '', echeance: t.echeance || '', faite: !t.faite,
     }))
   } catch (err) {
     maj(t)
@@ -193,7 +201,7 @@ const metaTache = (t) => [nomProjet(t.projet), duree(t.duree_minutes)].filter(Bo
             <button class="bouton secondaire" @click="choixOuvert = null">Annuler</button>
           </div>
           <div v-else-if="ouvert(e, 'tache')" class="actions" role="group" :aria-label="`Ranger « ${e.titre} » dans les tâches`">
-            <button v-for="l in listes" :key="l.quand" class="bouton secondaire" :disabled="enCours === cle(e)" @click="enTache(e, l.quand)">{{ l.court || l.nom }}</button>
+            <button v-for="l in rangements" :key="l.quand" class="bouton secondaire" :disabled="enCours === cle(e)" @click="enTache(e, l.quand)">{{ l.libelle }}</button>
             <button class="bouton secondaire" @click="choixOuvert = null">Annuler</button>
           </div>
           <div v-else class="actions">

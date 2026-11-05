@@ -15,7 +15,9 @@ type Tache struct {
 	Notes     string `json:"notes"`
 	Projet    string `json:"projet"`
 	Duree     int    `json:"duree_minutes,omitempty"`
-	Quand     string `json:"quand"`
+	Quand     string `json:"quand"`           // dates, semaine ou plus_tard
+	Debut     string `json:"debut,omitempty"` // période où la tâche est à faire, chaque soir
+	Fin       string `json:"fin,omitempty"`
 	Echeance  string `json:"echeance,omitempty"`
 	FaiteLe   string `json:"faite_le,omitempty"`
 	Source    string `json:"source,omitempty"`
@@ -24,11 +26,12 @@ type Tache struct {
 }
 
 const colonnesTache = `id, titre, notes, projet, COALESCE(duree_minutes, 0), quand,
+	COALESCE(to_char(debut, 'YYYY-MM-DD'), ''), COALESCE(to_char(fin, 'YYYY-MM-DD'), ''),
 	COALESCE(to_char(echeance, 'YYYY-MM-DD'), ''), COALESCE(to_char(faite_le, 'YYYY-MM-DD'), ''), source, source_ref, lien`
 
 func scanTache(row pgx.Row) (*Tache, error) {
 	t := &Tache{}
-	err := row.Scan(&t.ID, &t.Titre, &t.Notes, &t.Projet, &t.Duree, &t.Quand, &t.Echeance, &t.FaiteLe, &t.Source, &t.SourceRef, &t.Lien)
+	err := row.Scan(&t.ID, &t.Titre, &t.Notes, &t.Projet, &t.Duree, &t.Quand, &t.Debut, &t.Fin, &t.Echeance, &t.FaiteLe, &t.Source, &t.SourceRef, &t.Lien)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -56,7 +59,7 @@ func (s *Store) listerTaches(ctx context.Context, requete string, args ...any) (
 // cochée reste visible, barrée, le temps de la soirée).
 func (s *Store) Taches(ctx context.Context, userID int64, faitesDepuis time.Time) ([]Tache, error) {
 	return s.listerTaches(ctx, `WHERE user_id = $1 AND (faite_le IS NULL OR faite_le >= $2)
-		ORDER BY faite_le NULLS FIRST, echeance NULLS LAST, created_at, id`, userID, faitesDepuis)
+		ORDER BY faite_le NULLS FIRST, debut NULLS LAST, echeance NULLS LAST, created_at, id`, userID, faitesDepuis)
 }
 
 // TachesDues renvoie les tâches pas faites dont l'échéance est arrivée.
@@ -64,9 +67,11 @@ func (s *Store) TachesDues(ctx context.Context, userID int64, jour time.Time) ([
 	return s.listerTaches(ctx, `WHERE user_id = $1 AND faite_le IS NULL AND echeance <= $2 ORDER BY echeance, id`, userID, jour)
 }
 
-// TachesDatees renvoie les tâches dont l'échéance tombe entre deux dates incluses.
+// TachesDatees renvoie les tâches dont la période croise deux dates incluses, ou dont
+// l'échéance tombe entre elles.
 func (s *Store) TachesDatees(ctx context.Context, userID int64, du, au time.Time) ([]Tache, error) {
-	return s.listerTaches(ctx, `WHERE user_id = $1 AND echeance BETWEEN $2 AND $3 ORDER BY echeance, id`, userID, du, au)
+	return s.listerTaches(ctx, `WHERE user_id = $1 AND ((debut <= $3 AND fin >= $2) OR echeance BETWEEN $2 AND $3)
+		ORDER BY debut NULLS LAST, echeance, id`, userID, du, au)
 }
 
 func (s *Store) Tache(ctx context.Context, userID, id int64) (*Tache, error) {
@@ -74,17 +79,17 @@ func (s *Store) Tache(ctx context.Context, userID, id int64) (*Tache, error) {
 }
 
 func (s *Store) CreateTache(ctx context.Context, userID int64, t Tache) (*Tache, error) {
-	return scanTache(s.db.QueryRow(ctx, `INSERT INTO taches (user_id, titre, notes, projet, duree_minutes, quand, echeance, source, source_ref, lien)
-		VALUES ($1, $2, $3, $4, NULLIF($5, 0), $6, NULLIF($7, '')::date, $8, $9, $10) RETURNING `+colonnesTache,
-		userID, t.Titre, t.Notes, t.Projet, t.Duree, t.Quand, t.Echeance, t.Source, t.SourceRef, t.Lien))
+	return scanTache(s.db.QueryRow(ctx, `INSERT INTO taches (user_id, titre, notes, projet, duree_minutes, quand, debut, fin, echeance, source, source_ref, lien)
+		VALUES ($1, $2, $3, $4, NULLIF($5, 0), $6, NULLIF($7, '')::date, NULLIF($8, '')::date, NULLIF($9, '')::date, $10, $11, $12) RETURNING `+colonnesTache,
+		userID, t.Titre, t.Notes, t.Projet, t.Duree, t.Quand, t.Debut, t.Fin, t.Echeance, t.Source, t.SourceRef, t.Lien))
 }
 
 // UpdateTache change une tâche. faiteLe vide : la tâche est à faire.
 func (s *Store) UpdateTache(ctx context.Context, userID int64, t Tache) (*Tache, error) {
 	return scanTache(s.db.QueryRow(ctx, `UPDATE taches SET titre = $3, notes = $4, projet = $5, duree_minutes = NULLIF($6, 0),
-		quand = $7, echeance = NULLIF($8, '')::date, faite_le = NULLIF($9, '')::date
+		quand = $7, debut = NULLIF($8, '')::date, fin = NULLIF($9, '')::date, echeance = NULLIF($10, '')::date, faite_le = NULLIF($11, '')::date
 		WHERE id = $1 AND user_id = $2 RETURNING `+colonnesTache,
-		t.ID, userID, t.Titre, t.Notes, t.Projet, t.Duree, t.Quand, t.Echeance, t.FaiteLe))
+		t.ID, userID, t.Titre, t.Notes, t.Projet, t.Duree, t.Quand, t.Debut, t.Fin, t.Echeance, t.FaiteLe))
 }
 
 // FinirTache coche une tâche à la date donnée, si elle n'est pas déjà faite.
