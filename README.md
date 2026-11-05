@@ -69,7 +69,7 @@ Exemple pour un VPS Ubuntu ou Debian ; les commandes `sudo` se lancent sur le VP
 5. **L'environnement GitHub** : Settings › Environments › New environment › `production`.
    - Deployment protection rules : coche **Required reviewers** et ajoute-toi.
    - Deployment branches and tags : **Selected branches**, ajoute `main`.
-   - Environment secrets : `DEPLOY_SSH_KEY` (tout le contenu du fichier `microdash-deploiement`, la clé privée) et `DEPLOY_KNOWN_HOSTS` (le résultat de `ssh-keyscan -t ed25519 IP_DU_VPS`).
+   - Environment secrets : `DEPLOY_SSH_KEY` (tout le contenu du fichier `microdash-deploiement`, la clé privée) et `DEPLOY_KNOWN_HOSTS` (le résultat de `ssh-keyscan -t ed25519 IP_DU_VPS`, lancé depuis Git Bash ou Linux : celui de Windows est trop ancien pour les serveurs récents et ne renvoie rien).
    - Environment variables : `DEPLOY_HOST` (IP ou nom du VPS), `DEPLOY_USER` (`microdash`), et `DEPLOY_PORT` si SSH n'écoute pas sur 22.
 
    Supprime ensuite la clé privée de ton ordinateur : elle n'est plus utile qu'à GitHub.
