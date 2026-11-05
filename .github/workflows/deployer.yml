@@ -97,9 +97,18 @@ jobs:
             exit 1
           fi
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$CLE" > ~/.ssh/id_deploiement
+          # Un secret collé depuis Windows peut garder des fins de ligne \r\n, que SSH refuse.
+          printf '%s\n' "$CLE" | tr -d '\r' > ~/.ssh/id_deploiement
           chmod 600 ~/.ssh/id_deploiement
-          printf '%s\n' "$HOTES_CONNUS" > ~/.ssh/known_hosts
+          printf '%s\n' "$HOTES_CONNUS" | tr -d '\r' > ~/.ssh/known_hosts
+          if ! ssh-keygen -y -P '' -f ~/.ssh/id_deploiement > /dev/null 2>&1; then
+            echo "::error::DEPLOY_SSH_KEY n'est pas une clé privée lisible sans phrase de passe (-----BEGIN OPENSSH PRIVATE KEY----- …)."
+            exit 1
+          fi
+          if ! ssh-keygen -F "$HOTE" -f ~/.ssh/known_hosts > /dev/null; then
+            echo "::error::DEPLOY_KNOWN_HOSTS ne contient pas de clé pour $HOTE : mets-y la sortie de « ssh-keyscan -t ed25519 $HOTE », lancé depuis Git Bash ou Linux."
+            exit 1
+          fi
           printf 'Host serveur\n  HostName %s\n  User %s\n  Port %s\n  IdentityFile ~/.ssh/id_deploiement\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n  ServerAliveInterval 15\n' \
             "$HOTE" "$UTILISATEUR" "$PORT_SSH" > ~/.ssh/config
 
