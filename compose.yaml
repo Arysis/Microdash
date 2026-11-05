@@ -1,6 +1,6 @@
 # Microdash : front (web), API (api) et base (db).
 # Local : docker compose up --build   → http://localhost:8080
-# Prod  : fixer MICRODASH_VERSION dans .env, puis docker compose pull && docker compose up -d
+# Prod  : déployé par GitHub Actions (workflow « Déployer », voir le README), qui fixe MICRODASH_VERSION
 
 name: microdash
 

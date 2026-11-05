@@ -1,0 +1,119 @@
+name: Déployer
+
+# À chaque fusion dans main : vérifie le code, publie les images sur ghcr.io, puis attend ton feu
+# vert (environnement « production », relecteur obligatoire). Tu approuves depuis l'app GitHub :
+# Actions › Déployer › Review deployments › Approve. Le serveur est alors mis à jour par SSH.
+#
+# Retour arrière : Actions › Déployer › Run workflow, avec la version à remettre (ex. sha-1a2b3c4).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version déjà publiée à remettre (ex. sha-1a2b3c4). Vide : construire la branche choisie."
+        required: false
+        default: ''
+
+# Un seul déploiement à la fois : une nouvelle fusion attend la fin (ou le refus) de la précédente.
+concurrency:
+  group: deploiement-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - id: v
+        env:
+          VERSION: ${{ inputs.version }}
+          SHA: ${{ github.sha }}
+        run: |
+          tag="${VERSION:-sha-${SHA::7}}"
+          if ! [[ "$tag" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+            echo "::error::Version invalide : $tag"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  verifier:
+    if: inputs.version == ''
+    uses: ./.github/workflows/ci.yml
+
+  images:
+    if: inputs.version == ''
+    needs: [version, verifier]
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    strategy:
+      matrix: { service: [api, web] }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: '${{ github.actor }}', password: '${{ secrets.GITHUB_TOKEN }}' }
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service }}
+          push: true
+          # Variable du dépôt (Settings > Secrets and variables > Actions > Variables), ex. https://www.mondomaine.fr
+          build-args: SITE_URL=${{ vars.SITE_URL }}
+          # Rattache l'image au dépôt : le jeton du workflow peut ensuite la lire pour le serveur.
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          tags: |
+            ghcr.io/arysis/microdash-${{ matrix.service }}:${{ needs.version.outputs.tag }}
+            ghcr.io/arysis/microdash-${{ matrix.service }}:latest
+
+  serveur:
+    needs: [version, images]
+    # Après les images, ou directement pour remettre une version déjà publiée.
+    if: >-
+      always() && needs.version.result == 'success' &&
+      (needs.images.result == 'success' || (inputs.version != '' && needs.images.result == 'skipped'))
+    runs-on: ubuntu-latest
+    # Attend ton approbation ; secrets et variables de cet environnement (Settings > Environments).
+    environment:
+      name: production
+      url: ${{ vars.SITE_URL }}
+    permissions: { contents: read, packages: read }
+    steps:
+      - name: Connexion SSH
+        env:
+          HOTE: ${{ vars.DEPLOY_HOST }}
+          UTILISATEUR: ${{ vars.DEPLOY_USER }}
+          PORT_SSH: ${{ vars.DEPLOY_PORT || '22' }}
+          CLE: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOTES_CONNUS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$HOTE" ] || [ -z "$UTILISATEUR" ] || [ -z "$CLE" ] || [ -z "$HOTES_CONNUS" ]; then
+            echo "::error::Configure l'environnement « production » : variables DEPLOY_HOST et DEPLOY_USER, secrets DEPLOY_SSH_KEY et DEPLOY_KNOWN_HOSTS (voir le README)."
+            exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$CLE" > ~/.ssh/id_deploiement
+          chmod 600 ~/.ssh/id_deploiement
+          printf '%s\n' "$HOTES_CONNUS" > ~/.ssh/known_hosts
+          printf 'Host serveur\n  HostName %s\n  User %s\n  Port %s\n  IdentityFile ~/.ssh/id_deploiement\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n  ServerAliveInterval 15\n' \
+            "$HOTE" "$UTILISATEUR" "$PORT_SSH" > ~/.ssh/config
+
+      # La clé ne peut lancer que deploiement/deployer.sh sur le serveur. Le jeton (lecture des
+      # images, valable le temps du workflow) passe par l'entrée, jamais dans la commande.
+      - name: Mise à jour du serveur
+        env:
+          VERSION: ${{ needs.version.outputs.tag }}
+          JETON: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s\n' "$JETON" | ssh serveur "deployer $VERSION"
+
+      - name: Résumé
+        env:
+          VERSION: ${{ needs.version.outputs.tag }}
+        run: |
+          echo "Version **$VERSION** en ligne." >> "$GITHUB_STEP_SUMMARY"
+          echo "Pour revenir en arrière : Run workflow avec la version précédente." >> "$GITHUB_STEP_SUMMARY"
