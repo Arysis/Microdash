@@ -130,6 +130,16 @@ L'API relit la boîte de réception toutes les 5 minutes (et sur « Actualiser �
 
 À venir : le résumé fait directement par l'API Claude, sans copier-coller.
 
+## Mot de passe oublié (temporaire, sans e-mail)
+
+En attendant les e-mails, la page « Mot de passe oublié ? » permet de choisir un nouveau mot de passe avec seulement l'adresse du compte. **N'importe qui connaissant l'adresse pourrait le faire**, donc la page n'est ouverte qu'aux adresses listées dans `MDP_OUBLIE_EMAILS` :
+
+- vide (par défaut) : désactivée, le lien n'apparaît pas ;
+- `moi@exemple.fr,associe@exemple.fr` : seulement ces comptes ;
+- `*` : tous les comptes (à éviter en production).
+
+Après un changement, `docker compose up -d` suffit. Le nouveau mot de passe ferme toutes les sessions ouvertes du compte. Pense à vider la variable une fois ton accès récupéré.
+
 ## Rappels par e-mail (Resend)
 
 Sans `RESEND_API_KEY`, l'app marche normalement et n'envoie aucun e-mail. Pour activer les rappels :

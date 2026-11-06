@@ -7,6 +7,7 @@ const routes = [
   { path: '/', component: () => import('./views/AccueilView.vue'), meta: { acces: 'public', titre: null, description: site.description } },
   { path: '/connexion', component: () => import('./views/ConnexionView.vue'), props: { mode: 'connexion' }, meta: { acces: 'invite', titre: 'Connexion', description: 'Connecte-toi à ton compte Microdash.' } },
   { path: '/inscription', component: () => import('./views/ConnexionView.vue'), props: { mode: 'inscription' }, meta: { acces: 'invite', titre: 'Créer un compte', description: 'Crée ton compte Microdash gratuit avec une adresse e-mail.' } },
+  { path: '/mot-de-passe-oublie', component: () => import('./views/ConnexionView.vue'), props: { mode: 'oubli' }, meta: { acces: 'invite', titre: 'Mot de passe oublié', noindex: true } },
   { path: '/mentions-legales', component: () => import('./views/MentionsLegalesView.vue'), meta: { acces: 'public', titre: 'Mentions légales', description: "Éditeur et hébergeur du site Microdash." } },
   { path: '/confidentialite', component: () => import('./views/ConfidentialiteView.vue'), meta: { acces: 'public', titre: 'Confidentialité', description: 'Les données que Microdash garde, pourquoi, combien de temps, et comment les effacer.' } },
   { path: '/ce-soir', component: () => import('./views/CeSoirView.vue'), meta: { acces: 'membre', titre: 'Ce soir', relief: true } },

@@ -48,6 +48,7 @@ type Server struct {
 	QontoURL     string            // vide : API Qonto ; une autre adresse sert aux tests
 	Modules      *modules.Registre // modules du copilote, sources de « Ce soir »
 	Mails        *mails.Module     // module Mails : synchro et archivage Gmail
+	MdpOublie    []string          // adresses autorisées à réinitialiser sans e-mail ; « * » : toutes ; vide : coupé
 	echecsStripe sync.Map          // compte → heure du dernier échec de lecture Stripe
 	now          func() time.Time
 }
@@ -73,6 +74,8 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/auth/register", s.register)
 			r.Post("/auth/login", s.login)
 			r.Post("/auth/logout", s.logout)
+			r.Get("/auth/mot-de-passe-oublie", s.etatMdpOublie)
+			r.Post("/auth/mot-de-passe-oublie", s.mdpOublie)
 		})
 		r.Group(func(r chi.Router) {
 			r.Use(s.authentifier, exigerJSON)

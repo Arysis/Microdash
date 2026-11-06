@@ -86,6 +86,9 @@ func run() error {
 	} else {
 		slog.Info("connexions Stripe, Qonto et Gmail désactivées : CLE_CHIFFREMENT vide")
 	}
+	if api.MdpOublie = httpapi.ListeMdpOublie(os.Getenv("MDP_OUBLIE_EMAILS")); len(api.MdpOublie) > 0 {
+		slog.Warn("mot de passe oublié sans e-mail activé", "adresses", api.MdpOublie)
+	}
 	api.StripeURL = os.Getenv("STRIPE_API_URL") // tests uniquement : faux serveur Stripe
 	api.QontoURL = os.Getenv("QONTO_API_URL")   // tests uniquement : faux serveur Qonto
 	api.Mails = &mails.Module{Donnees: st, Cle: api.Chiffre, Boite: mails.Gmail{}, Paris: alertes.Paris}
