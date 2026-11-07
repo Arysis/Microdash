@@ -33,6 +33,7 @@ services:
       ALERTES_LIMITER_A: ${ALERTES_LIMITER_A:-}
       SITE_URL: ${SITE_URL:-}
       CLE_CHIFFREMENT: ${CLE_CHIFFREMENT:-}
+      MDP_OUBLIE_EMAILS: ${MDP_OUBLIE_EMAILS:-}
     depends_on:
       db:
         condition: service_healthy
