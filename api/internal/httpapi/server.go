@@ -49,6 +49,7 @@ type Server struct {
 	Modules      *modules.Registre // modules du copilote, sources de « Ce soir »
 	Mails        *mails.Module     // module Mails : synchro et archivage Gmail
 	MdpOublie    []string          // adresses autorisées à réinitialiser sans e-mail ; « * » : toutes ; vide : coupé
+	SiteURL      string            // adresse publique (SITE_URL), sans « / » final ; vide : déduite de la requête
 	echecsStripe sync.Map          // compte → heure du dernier échec de lecture Stripe
 	now          func() time.Time
 }
@@ -61,6 +62,15 @@ func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer)
 	r.Use(middleware.Timeout(15 * time.Second))
+
+	// Connecteur Claude : serveur MCP et autorisation OAuth (voir oauth.go et mcp.go).
+	r.Get("/.well-known/oauth-protected-resource", s.metadonneesRessource)
+	r.Get("/.well-known/oauth-protected-resource/mcp", s.metadonneesRessource)
+	r.Get("/.well-known/oauth-authorization-server", s.metadonneesAutorisation)
+	r.Post("/oauth/register", s.enregistrerClient)
+	r.Post("/oauth/token", s.jetonOAuth)
+	r.Post("/oauth/revoke", s.revoquerOAuth)
+	r.Handle("/mcp", s.handlerMCP())
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", s.health)
@@ -140,6 +150,10 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/mails/lus", s.marquerMailsLus)
 			r.Post("/mails/veille", s.createRegleVeille)
 			r.Delete("/mails/veille/{id}", s.deleteRegleVeille)
+			r.Get("/oauth/demande", s.getDemandeOAuth)
+			r.Post("/oauth/autoriser", s.autoriserOAuth)
+			r.Get("/claude", s.getAccesClaude)
+			r.Delete("/claude", s.couperAccesClaude)
 			r.Post("/mails/regles", s.createRegleMail)
 			r.Delete("/mails/regles/{id}", s.deleteRegleMail)
 		})

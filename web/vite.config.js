@@ -38,7 +38,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        navigateFallbackDenylist: [/^\/api\//],
+        navigateFallbackDenylist: [/^\/api\//, /^\/(mcp|oauth\/|\.well-known\/|autoriser-claude)/],
         runtimeCaching: [
           {
             // Lecture : réseau d'abord, dernières données en cache hors ligne. Les exports restent hors cache.

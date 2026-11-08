@@ -2,7 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { session, chargerSession, chargerModules } from './session.js'
 import { site } from '../theme.js'
 
-// acces : « public » pour tout le monde, « invite » pour les visiteurs non connectés, « membre » pour l'app.
+// acces : « public » pour tout le monde, « invite » pour les visiteurs non connectés, « membre » pour l'app,
+// « connecte » pour une page seule qui demande d'être connecté (sans menu ni profil requis).
 const routes = [
   { path: '/', component: () => import('./views/AccueilView.vue'), meta: { acces: 'public', titre: null, description: site.description } },
   { path: '/connexion', component: () => import('./views/ConnexionView.vue'), props: { mode: 'connexion' }, meta: { acces: 'invite', titre: 'Connexion', description: 'Connecte-toi à ton compte Microdash.' } },
@@ -19,6 +20,7 @@ const routes = [
   { path: '/mails', component: () => import('./views/MailsView.vue'), meta: { acces: 'membre', titre: 'Mails', relief: true } },
   { path: '/echeances', component: () => import('./views/EcheancesView.vue'), meta: { acces: 'membre', titre: 'Échéances', relief: true, groupe: 'finances' } },
   { path: '/agenda', component: () => import('./views/AgendaView.vue'), meta: { acces: 'membre', titre: 'Agenda', relief: true, large: true } },
+  { path: '/autoriser-claude', component: () => import('./views/AutoriserClaudeView.vue'), meta: { acces: 'connecte', titre: 'Autoriser Claude', noindex: true } },
   { path: '/desinscription', component: () => import('./views/DesinscriptionView.vue'), meta: { acces: 'public', titre: 'Rappels par e-mail', noindex: true } },
   { path: '/profil', component: () => import('./views/ProfilView.vue'), meta: { acces: 'membre', titre: 'Ton activité', groupe: 'plus' } },
   { path: '/compte', component: () => import('./views/CompteView.vue'), meta: { acces: 'membre', titre: 'Compte', groupe: 'plus' } },
@@ -35,11 +37,17 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 })
 
+// suiteSure : une adresse de l'app où revenir après la connexion, jamais un autre site.
+export function suiteSure(suite) {
+  return typeof suite === 'string' && suite.startsWith('/') && !suite.startsWith('//') && !suite.startsWith('/\\') ? suite : null
+}
+
 router.beforeEach(async (to) => {
   if (!session.charge) await chargerSession()
   const connecte = Boolean(session.user)
   if (to.path === '/' && connecte) return '/ce-soir'
-  if (to.meta.acces === 'invite' && connecte) return '/ce-soir'
+  if (to.meta.acces === 'invite' && connecte) return suiteSure(to.query.suite) || '/ce-soir'
+  if (to.meta.acces === 'connecte' && !connecte) return { path: '/connexion', query: { suite: to.fullPath } }
   if (to.meta.acces === 'membre') {
     if (!connecte) return '/connexion'
     if (!session.modules) await chargerModules()

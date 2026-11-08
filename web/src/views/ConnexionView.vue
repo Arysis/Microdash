@@ -1,12 +1,17 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api.js'
 import { session } from '../session.js'
+import { suiteSure } from '../router.js'
 
 // mode : connexion, inscription ou oubli (nouveau mot de passe sans e-mail, tant que le serveur l'autorise).
 const props = defineProps({ mode: { type: String, required: true } })
 const router = useRouter()
+const route = useRoute()
+// Page où revenir après la connexion (ex. : l'autorisation de Claude), gardée d'un mode à l'autre.
+const suite = computed(() => suiteSure(route.query.suite))
+const requete = computed(() => (suite.value ? { suite: suite.value } : {}))
 const email = ref('')
 const motDePasse = ref('')
 const confirmation = ref('')
@@ -40,7 +45,7 @@ async function valider() {
   envoi.value = true
   try {
     session.user = await api.post(texte.value.chemin, { email: email.value, mot_de_passe: motDePasse.value })
-    router.push(session.user.profil_complet ? '/ce-soir' : '/profil')
+    router.push(suite.value || (session.user.profil_complet ? '/ce-soir' : '/profil'))
   } catch (e) {
     erreur.value = e.message
   } finally {
@@ -81,12 +86,12 @@ async function valider() {
         <button class="bouton principal large" :disabled="envoi">{{ texte.bouton }}</button>
       </form>
       <p v-if="mode === 'connexion' && oubliActif" class="bascule-mode">
-        <RouterLink to="/mot-de-passe-oublie">Mot de passe oublié ?</RouterLink>
+        <RouterLink :to="{ path: '/mot-de-passe-oublie', query: requete }">Mot de passe oublié ?</RouterLink>
       </p>
       <p class="bascule-mode">
-        <template v-if="mode === 'inscription'">Tu as déjà un compte ? <RouterLink to="/connexion">Connecte-toi</RouterLink></template>
-        <template v-else-if="mode === 'oubli'">Ça te revient ? <RouterLink to="/connexion">Connecte-toi</RouterLink></template>
-        <template v-else>Pas encore de compte ? <RouterLink to="/inscription">Crée-le ici</RouterLink></template>
+        <template v-if="mode === 'inscription'">Tu as déjà un compte ? <RouterLink :to="{ path: '/connexion', query: requete }">Connecte-toi</RouterLink></template>
+        <template v-else-if="mode === 'oubli'">Ça te revient ? <RouterLink :to="{ path: '/connexion', query: requete }">Connecte-toi</RouterLink></template>
+        <template v-else>Pas encore de compte ? <RouterLink :to="{ path: '/inscription', query: requete }">Crée-le ici</RouterLink></template>
       </p>
     </div>
   </section>
