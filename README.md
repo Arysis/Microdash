@@ -130,6 +130,18 @@ L'API relit la boîte de réception toutes les 5 minutes (et sur « Actualiser �
 
 À venir : le résumé fait directement par l'API Claude, sans copier-coller.
 
+## Connecteur Claude (MCP)
+
+Microdash sert un serveur MCP sur `/mcp` : on l'ajoute dans Claude comme connecteur personnalisé, puis on écrit « ajoute ce soir la tâche Relancer Paul » ou « qu'est-ce que j'ai jeudi ? ».
+
+1. Dans Microdash, page Compte, carte « Claude » : copie l'adresse (`SITE_URL` + `/mcp`, par exemple `https://www.mondomaine.fr/mcp`).
+2. Dans Claude : Paramètres > Connecteurs > Ajouter un connecteur personnalisé, nom « Microdash », colle l'adresse.
+3. Claude ouvre la page « Autoriser Claude » de Microdash : connecte-toi si besoin, puis Autoriser.
+
+Outils : `ce_soir`, `lister_taches`, `ajouter_tache`, `modifier_tache`, `terminer_tache`, `supprimer_tache`, `agenda`, `ajouter_rendez_vous`, `supprimer_rendez_vous`, `marquer_echeance`, `resume_finances`. Rien sur les saisies, Qonto, Stripe, les mails ni le compte.
+
+Sécurité : OAuth 2.1 (enregistrement automatique du client, PKCE S256). Seules les adresses de retour `https://claude.ai/…` et `https://claude.com/…` sont acceptées. Jetons hachés en base : accès d'une heure, renouvellement de 90 jours changé à chaque usage. « Couper l'accès de Claude » (page Compte) ou un changement de mot de passe les invalide tous. `SITE_URL` doit être l'adresse publique exacte du site : elle sert d'émetteur OAuth et d'adresse du serveur MCP.
+
 ## Mot de passe oublié (temporaire, sans e-mail)
 
 En attendant les e-mails, la page « Mot de passe oublié ? » permet de choisir un nouveau mot de passe avec seulement l'adresse du compte. **N'importe qui connaissant l'adresse pourrait le faire**, donc la page n'est ouverte qu'aux adresses listées dans `MDP_OUBLIE_EMAILS` :

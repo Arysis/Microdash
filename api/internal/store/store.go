@@ -124,13 +124,17 @@ func (s *Store) DeleteUser(ctx context.Context, id int64) error {
 	return err
 }
 
-// ChangerMotDePasse remplace le mot de passe et ferme toutes les sessions du compte.
+// ChangerMotDePasse remplace le mot de passe et ferme toutes les sessions du compte, accès de Claude compris.
 func (s *Store) ChangerMotDePasse(ctx context.Context, id int64, hash string) error {
 	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2 WHERE id = $1`, id, hash); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, id)
+		if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, id); err != nil {
+			return err
+		}
+		// Le connecteur Claude aussi : il faudra l'autoriser de nouveau.
+		_, err := tx.Exec(ctx, `DELETE FROM oauth_acces WHERE user_id = $1`, id)
 		return err
 	})
 }

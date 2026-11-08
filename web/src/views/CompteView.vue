@@ -2,9 +2,10 @@
 import { onMounted, ref } from 'vue'
 import { api } from '../api.js'
 import { useRouter } from 'vue-router'
-import { LogOut, Trash2, ChevronRight, FileDown } from 'lucide-vue-next'
+import { LogOut, Trash2, ChevronRight, FileDown, Copy, Unplug } from 'lucide-vue-next'
 import { session, deconnecter, supprimerCompte } from '../session.js'
 import { demanderConfirmation } from '../confirmation.js'
+import { formatDate } from '../format.js'
 
 const router = useRouter()
 const erreur = ref('')
@@ -28,6 +29,46 @@ onMounted(async () => {
     erreurRappels.value = e.message
   }
 })
+
+// Connecteur Claude : adresse à ajouter dans Claude, accès donnés et bouton pour les couper.
+const claude = ref(null)
+const erreurClaude = ref('')
+const copie = ref(false)
+
+async function chargerClaude() {
+  try {
+    claude.value = await api.get('/claude')
+  } catch (e) {
+    erreurClaude.value = e.message
+  }
+}
+onMounted(chargerClaude)
+
+async function copierAdresse() {
+  try {
+    await navigator.clipboard.writeText(claude.value.adresse)
+    copie.value = true
+    setTimeout(() => (copie.value = false), 2000)
+  } catch {
+    erreurClaude.value = "Copie impossible : sélectionne l'adresse à la main."
+  }
+}
+
+async function couperClaude() {
+  const ok = await demanderConfirmation({
+    titre: "Couper l'accès de Claude ?",
+    message: 'Claude ne pourra plus lire ni changer ton compte. Pour le reconnecter, il faudra l\'autoriser de nouveau.',
+    action: "Couper l'accès",
+  })
+  if (!ok) return
+  erreurClaude.value = ''
+  try {
+    await api.del('/claude')
+    await chargerClaude()
+  } catch (e) {
+    erreurClaude.value = e.message
+  }
+}
 
 async function changerRappel(cle, valeur) {
   erreurRappels.value = ''
@@ -97,6 +138,30 @@ async function supprimer() {
     <p class="aide">Envoyés à {{ session.user?.email }}. Chaque e-mail contient un lien pour te désinscrire.</p>
   </section>
 
+  <section class="carte pile" aria-labelledby="titre-claude">
+    <h2 id="titre-claude">Claude</h2>
+    <template v-if="claude">
+      <p class="aide">
+        Pilote Microdash en écrivant à Claude : « ajoute ce soir la tâche Relancer Paul », « qu'est-ce que j'ai jeudi ? ».
+        Dans Claude, ouvre Paramètres, Connecteurs, Ajouter un connecteur personnalisé, et colle cette adresse :
+      </p>
+      <div class="adresse">
+        <code>{{ claude.adresse }}</code>
+        <button class="bouton secondaire" @click="copierAdresse"><Copy v-bind="icone" />{{ copie ? 'Copiée' : 'Copier' }}</button>
+      </div>
+      <template v-if="claude.acces.length">
+        <ul class="acces">
+          <li v-for="a in claude.acces" :key="a.id">
+            {{ a.client }} : autorisé le {{ formatDate(a.cree_le.slice(0, 10)) }}<template v-if="a.utilise_le">, dernier usage le {{ formatDate(a.utilise_le.slice(0, 10)) }}</template>
+          </li>
+        </ul>
+        <button class="bouton secondaire danger" @click="couperClaude"><Unplug v-bind="icone" />Couper l'accès de Claude</button>
+      </template>
+      <p v-else class="aide">Claude n'a pas accès à ton compte pour le moment.</p>
+    </template>
+    <p v-if="erreurClaude" class="erreur" role="alert">{{ erreurClaude }}</p>
+  </section>
+
   <section class="carte pile" aria-labelledby="titre-exports">
     <div class="titre-ligne">
       <h2 id="titre-exports">Exporter <InfoBulle k="exports" /></h2>
@@ -150,6 +215,9 @@ h1 { margin-bottom: var(--e5); }
 .interrupteur small { font-weight: 400; }
 .interrupteur input { width: 20px; height: 20px; margin: 0; flex-shrink: 0; accent-color: var(--safran); }
 .rappels > .aide { margin-top: var(--e2); }
+.adresse { display: flex; gap: var(--e3); align-items: center; flex-wrap: wrap; }
+.adresse code { flex: 1 1 220px; padding: var(--e2) var(--e3); background: var(--papier); border: 1px solid var(--lin); border-radius: var(--rayon); font-size: 14px; overflow-wrap: anywhere; }
+.acces { margin: 0; padding-left: var(--e5); }
 .liens-legaux { display: flex; gap: var(--e5); margin-top: var(--e5); }
 .liens-legaux a { color: var(--pierre); }
 </style>
