@@ -91,6 +91,7 @@ func (s *Server) Routes() http.Handler {
 			r.Use(s.authentifier, exigerJSON)
 			r.Get("/me", s.me)
 			r.Delete("/me", s.deleteMe)
+			r.Put("/me/mot-de-passe", s.changerMotDePasse)
 			r.Get("/profil", s.getProfil)
 			r.Put("/profil", s.putProfil)
 			r.Get("/transactions", s.listTransactions)
