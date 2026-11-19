@@ -47,3 +47,14 @@ func TestMdpOublieRefuse(t *testing.T) {
 		}
 	}
 }
+
+func TestChangerMotDePasseCourt(t *testing.T) {
+	s := &Server{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/api/me/mot-de-passe", strings.NewReader(`{"actuel":"x","nouveau":"court"}`))
+	r.Header.Set("Content-Type", "application/json")
+	s.changerMotDePasse(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("statut %d, attendu 400", w.Code)
+	}
+}

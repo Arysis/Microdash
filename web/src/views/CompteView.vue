@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '../api.js'
 import { useRouter } from 'vue-router'
-import { LogOut, Trash2, ChevronRight, FileDown, Copy, Unplug } from 'lucide-vue-next'
+import { LogOut, Trash2, ChevronRight, FileDown, Copy, Unplug, KeyRound } from 'lucide-vue-next'
 import { session, deconnecter, supprimerCompte } from '../session.js'
 import { demanderConfirmation } from '../confirmation.js'
 import { formatDate } from '../format.js'
@@ -82,6 +82,33 @@ async function changerRappel(cle, valeur) {
   }
 }
 
+// Changement du mot de passe, connecté : l'actuel, puis le nouveau deux fois.
+const mdp = ref({ actuel: '', nouveau: '', confirmation: '' })
+const formMdp = ref(false)
+const envoiMdp = ref(false)
+const erreurMdp = ref('')
+const mdpChange = ref(false)
+
+async function changerMotDePasse() {
+  erreurMdp.value = ''
+  mdpChange.value = false
+  if (mdp.value.nouveau !== mdp.value.confirmation) {
+    erreurMdp.value = 'Les deux nouveaux mots de passe ne sont pas identiques.'
+    return
+  }
+  envoiMdp.value = true
+  try {
+    session.user = await api.put('/me/mot-de-passe', { actuel: mdp.value.actuel, nouveau: mdp.value.nouveau })
+    mdp.value = { actuel: '', nouveau: '', confirmation: '' }
+    formMdp.value = false
+    mdpChange.value = true
+  } catch (e) {
+    erreurMdp.value = e.message
+  } finally {
+    envoiMdp.value = false
+  }
+}
+
 async function quitter() {
   erreur.value = ''
   try {
@@ -124,6 +151,26 @@ async function supprimer() {
       </span>
       <ChevronRight v-bind="icone" />
     </RouterLink>
+  </section>
+
+  <section class="carte pile" aria-labelledby="titre-mdp">
+    <h2 id="titre-mdp">Mot de passe</h2>
+    <form v-if="formMdp" class="pile" @submit.prevent="changerMotDePasse">
+      <input type="email" :value="session.user?.email" autocomplete="username" hidden readonly />
+      <label>Mot de passe actuel <input v-model="mdp.actuel" type="password" autocomplete="current-password" required /></label>
+      <label>Nouveau mot de passe <input v-model="mdp.nouveau" type="password" autocomplete="new-password" minlength="10" required /></label>
+      <label>Confirme le nouveau <input v-model="mdp.confirmation" type="password" autocomplete="new-password" minlength="10" required /></label>
+      <p class="aide">10 caractères au moins. Tes autres appareils et l'accès de Claude seront déconnectés.</p>
+      <p v-if="erreurMdp" class="erreur" role="alert">{{ erreurMdp }}</p>
+      <div class="adresse">
+        <button class="bouton principal" :disabled="envoiMdp">Changer le mot de passe</button>
+        <button type="button" class="bouton secondaire" @click="formMdp = false; erreurMdp = ''">Annuler</button>
+      </div>
+    </form>
+    <template v-else>
+      <p v-if="mdpChange" class="aide" role="status">Mot de passe changé. Tes autres appareils sont déconnectés.</p>
+      <button class="bouton secondaire" @click="formMdp = true; mdpChange = false"><KeyRound v-bind="icone" />Changer le mot de passe</button>
+    </template>
   </section>
 
   <section class="carte rappels" aria-labelledby="titre-rappels">
