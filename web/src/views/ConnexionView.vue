@@ -18,6 +18,8 @@ const confirmation = ref('')
 const erreur = ref('')
 const envoi = ref(false)
 const oubliActif = ref(false)
+const avecCode = ref(false) // le serveur accepte un code de secours
+const code = ref('')
 
 const nouveau = computed(() => props.mode !== 'connexion')
 const textes = {
@@ -30,7 +32,9 @@ const texte = computed(() => textes[props.mode])
 onMounted(async () => {
   if (props.mode === 'inscription') return
   try {
-    oubliActif.value = (await api.get('/auth/mot-de-passe-oublie')).actif
+    const etat = await api.get('/auth/mot-de-passe-oublie')
+    oubliActif.value = etat.actif
+    avecCode.value = !!etat.code
   } catch {
     oubliActif.value = false
   }
@@ -44,7 +48,9 @@ async function valider() {
   }
   envoi.value = true
   try {
-    session.user = await api.post(texte.value.chemin, { email: email.value, mot_de_passe: motDePasse.value })
+    const corps = { email: email.value, mot_de_passe: motDePasse.value }
+    if (props.mode === 'oubli' && code.value) corps.code = code.value
+    session.user = await api.post(texte.value.chemin, corps)
     router.push(suite.value || (session.user.profil_complet ? '/ce-soir' : '/profil'))
   } catch (e) {
     erreur.value = e.message
@@ -67,6 +73,10 @@ async function valider() {
       </p>
       <form v-else @submit.prevent="valider">
         <label>E-mail <input v-model="email" type="email" autocomplete="email" required /></label>
+        <label v-if="mode === 'oubli' && avecCode">
+          Code de secours
+          <input v-model="code" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" />
+        </label>
         <label>
           {{ mode === 'oubli' ? 'Nouveau mot de passe' : 'Mot de passe' }}
           <input

@@ -49,6 +49,7 @@ type Server struct {
 	Modules      *modules.Registre // modules du copilote, sources de « Ce soir »
 	Mails        *mails.Module     // module Mails : synchro et archivage Gmail
 	MdpOublie    []string          // adresses autorisées à réinitialiser sans e-mail ; « * » : toutes ; vide : coupé
+	CodeSecours  string            // empreinte du code de secours à usage unique ; vide : pas de code
 	SiteURL      string            // adresse publique (SITE_URL), sans « / » final ; vide : déduite de la requête
 	echecsStripe sync.Map          // compte → heure du dernier échec de lecture Stripe
 	now          func() time.Time
