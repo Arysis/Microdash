@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/arysis/microdash/api/internal/alertes"
 	"github.com/arysis/microdash/api/internal/calc"
 	"github.com/arysis/microdash/api/internal/store"
 )
@@ -24,11 +26,13 @@ import (
 // --- Connecteur Claude : serveur MCP ---
 //
 // Chaque outil appelle le même code que l'app (les handlers de l'API), avec le compte du jeton :
-// mêmes règles, mêmes messages d'erreur. Rien d'autre n'est exposé (compte, clés, saisies, Qonto, mails).
+// mêmes règles, mêmes messages d'erreur. Rien d'autre n'est exposé (compte, clés, saisies, Qonto).
+// Des mails, Claude lit la veille et les non lus déjà copiés, et peut seulement les marquer lus.
 
 const instructionsMCP = `Microdash gère l'activité d'un micro-entrepreneur français : tâches, agenda (rendez-vous, échéances URSSAF et impôts) et finances.
 Les dates sont au format AAAA-MM-JJ, à l'heure de Paris ; chaque réponse donne « aujourdhui ». « Ce soir » ou « aujourd'hui » = la date du jour.
-Avant de modifier, terminer ou supprimer une tâche ou un rendez-vous, retrouve son id avec lister_taches ou agenda.`
+Avant de modifier, terminer ou supprimer une tâche ou un rendez-vous, retrouve son id avec lister_taches ou agenda.
+Mails : lire_veille donne le texte des mails de veille technologique, lire_mails_non_lus les autres mails non lus (expéditeur, sujet, début du texte). Après avoir donné ton résumé, marque comme lus, avec marquer_mails_lus, uniquement les mails que tu as résumés, par leur ref.`
 
 // enregistreur garde la réponse d'un handler appelé en interne.
 type enregistreur struct {
@@ -198,6 +202,14 @@ type entreeEcheance struct {
 	Faite bool   `json:"faite" jsonschema:"true : déclarée ou payée ; false : à faire de nouveau"`
 }
 
+type entreeVeille struct {
+	Max int `json:"max,omitempty" jsonschema:"nombre de mails au plus, les plus anciens d'abord (par défaut 30, au plus 100) ; le reste se lit après les avoir marqués lus"`
+}
+
+type entreeMarquerLus struct {
+	Refs []string `json:"refs" jsonschema:"les ref des mails à marquer comme lus dans Gmail (lire_veille ou lire_mails_non_lus), 200 au plus"`
+}
+
 type entreeFinances struct {
 	Annee int `json:"annee,omitempty" jsonschema:"année civile ; par défaut l'année en cours"`
 }
@@ -325,7 +337,109 @@ func (s *Server) serveurMCP() *mcp.Server {
 			return s.resumeFinances(ctx, uid, in.Annee)
 		})
 
+	outil(s, srv, &mcp.Tool{Name: "lire_veille", Annotations: lecture("Lire la veille"),
+		Description: "Les mails de veille technologique non lus (newsletters suivies), du plus ancien au plus récent, avec le début de leur texte (4 000 caractères au plus chacun). Pour en faire un résumé, puis les marquer lus avec marquer_mails_lus."},
+		func(ctx context.Context, uid int64, in entreeVeille) (any, error) {
+			return s.mailsMCP(ctx, uid, true, in.Max)
+		})
+
+	outil(s, srv, &mcp.Tool{Name: "lire_mails_non_lus", Annotations: lecture("Lire les mails non lus"),
+		Description: "Les mails non lus des 14 derniers jours dans la boîte de réception, hors veille : expéditeur, sujet, date, 200 premiers caractères, et s'il est important (avec la raison). Le texte complet n'est pas disponible : le lien ouvre le mail dans Gmail."},
+		func(ctx context.Context, uid int64, _ entreeVide) (any, error) {
+			return s.mailsMCP(ctx, uid, false, 0)
+		})
+
+	outil(s, srv, &mcp.Tool{Name: "marquer_mails_lus", Annotations: ecriture("Marquer des mails comme lus", false),
+		Description: "Marque des mails comme lus dans Gmail (ils sortent alors de Microdash). À faire seulement pour les mails résumés à la personne, ou qu'elle a demandé de marquer."},
+		func(ctx context.Context, uid int64, in entreeMarquerLus) (any, error) {
+			if err := s.appeler(ctx, uid, s.marquerMailsLus, appel{methode: http.MethodPost, corps: map[string]any{"refs": in.Refs}}, nil); err != nil {
+				return nil, err
+			}
+			return map[string]any{"marques_lus": len(in.Refs)}, nil
+		})
+
 	return srv
+}
+
+// mailMCP est un mail tel que Claude le lit.
+type mailMCP struct {
+	Ref        string `json:"ref"`
+	Expediteur string `json:"expediteur"`
+	Sujet      string `json:"sujet"`
+	RecuLe     string `json:"recu_le"`
+	Texte      string `json:"texte,omitempty"`
+	Extrait    string `json:"extrait,omitempty"`
+	Important  bool   `json:"important,omitempty"`
+	Raison     string `json:"raison,omitempty"`
+	Lien       string `json:"lien"`
+}
+
+// mailsMCP lit les mails copiés de Gmail : ceux de la veille (veille = true, au plus max, les plus
+// anciens d'abord) ou les autres (les importants d'abord).
+func (s *Server) mailsMCP(ctx context.Context, uid int64, veille bool, max int) (any, error) {
+	var etat mailsJSON
+	if err := s.appeler(ctx, uid, s.getMails, appel{methode: http.MethodGet}, &etat); err != nil {
+		return nil, err
+	}
+	if !etat.Connecte {
+		return nil, errors.New("Gmail n'est pas connecté : connecte-le dans Réglages de Microdash")
+	}
+	var choisis []mailJSON
+	for _, m := range etat.Mails {
+		if m.Veille == veille {
+			choisis = append(choisis, m)
+		}
+	}
+	if veille {
+		slices.SortStableFunc(choisis, func(a, b mailJSON) int { return a.Recu.Compare(b.Recu) })
+	} else {
+		slices.SortStableFunc(choisis, func(a, b mailJSON) int {
+			if a.Important != b.Important {
+				if a.Important {
+					return -1
+				}
+				return 1
+			}
+			return b.Recu.Compare(a.Recu)
+		})
+	}
+	total := len(choisis)
+	if veille {
+		if max <= 0 {
+			max = 30
+		}
+		max = min(max, 100)
+		choisis = choisis[:min(max, total)]
+	}
+	paris := alertes.Paris
+	res := []mailMCP{}
+	for _, m := range choisis {
+		de := m.De
+		if m.DeNom != "" {
+			de = m.DeNom + " <" + m.De + ">"
+		}
+		mm := mailMCP{Ref: m.Ref, Expediteur: de, Sujet: m.Sujet, RecuLe: m.Recu.In(paris).Format("2006-01-02 15:04"), Lien: m.Lien}
+		if veille {
+			mm.Texte = m.Texte
+			if mm.Texte == "" {
+				mm.Texte = m.Extrait
+			}
+		} else {
+			mm.Extrait, mm.Important, mm.Raison = m.Extrait, m.Important, m.Raison
+		}
+		res = append(res, mm)
+	}
+	out := map[string]any{"aujourdhui": s.aujourdhui().Format(formatDate), "mails": res, "total": total}
+	if etat.SynchroLe != nil {
+		out["copie_gmail_le"] = etat.SynchroLe.In(paris).Format("2006-01-02 15:04")
+	}
+	if etat.Erreur != "" {
+		out["erreur_gmail"] = etat.Erreur
+	}
+	if total > len(res) {
+		out["restants"] = total - len(res)
+	}
+	return out, nil
 }
 
 func remplacer[T any](champ *T, v *T) {

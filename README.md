@@ -138,7 +138,7 @@ Microdash sert un serveur MCP sur `/mcp` : on l'ajoute dans Claude comme connect
 2. Dans Claude : Paramètres > Connecteurs > Ajouter un connecteur personnalisé, nom « Microdash », colle l'adresse.
 3. Claude ouvre la page « Autoriser Claude » de Microdash : connecte-toi si besoin, puis Autoriser.
 
-Outils : `ce_soir`, `lister_taches`, `ajouter_tache`, `modifier_tache`, `terminer_tache`, `supprimer_tache`, `agenda`, `ajouter_rendez_vous`, `supprimer_rendez_vous`, `marquer_echeance`, `resume_finances`. Rien sur les saisies, Qonto, Stripe, les mails ni le compte.
+Outils : `ce_soir`, `lister_taches`, `ajouter_tache`, `modifier_tache`, `terminer_tache`, `supprimer_tache`, `agenda`, `ajouter_rendez_vous`, `supprimer_rendez_vous`, `marquer_echeance`, `resume_finances`, `lire_veille`, `lire_mails_non_lus`, `marquer_mails_lus`. Rien sur les saisies, Qonto, Stripe ni le compte. Des mails, Claude lit seulement la copie déjà faite par Microdash (texte de la veille, début des autres non lus) et peut les marquer lus. La page « Commandes Claude » (`/claude`, menu Plus) les explique avec des exemples de phrases.
 
 Sécurité : OAuth 2.1 (enregistrement automatique du client, PKCE S256). Seules les adresses de retour `https://claude.ai/…` et `https://claude.com/…` sont acceptées. Jetons hachés en base : accès d'une heure, renouvellement de 90 jours changé à chaque usage. « Couper l'accès de Claude » (page Compte) ou un changement de mot de passe les invalide tous. `SITE_URL` doit être l'adresse publique exacte du site : elle sert d'émetteur OAuth et d'adresse du serveur MCP.
 

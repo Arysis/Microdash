@@ -217,6 +217,7 @@ async function marquerLus() {
             <p class="aide">
               Copie le texte de tes {{ veille.length }} mail{{ veille.length > 1 ? 's' : '' }} de veille et colle-le dans Claude pour en avoir le résumé.
               Ils sont ensuite marqués lus dans Gmail.
+              Avec le connecteur, écris simplement à Claude « Résume ma veille » : il lit tout, sans copier-coller (<RouterLink to="/claude">commandes</RouterLink>).
             </p>
             <button class="bouton principal" :disabled="!veille.length || enCours === 'veille'" @click="copierPourClaude">
               {{ enCours === 'veille' ? 'Envoi à Gmail…' : 'Copier pour Claude' }}
