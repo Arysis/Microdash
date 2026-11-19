@@ -139,6 +139,32 @@ func (s *Store) ChangerMotDePasse(ctx context.Context, id int64, hash string) er
 	})
 }
 
+// ErrCodeUtilise : le code de secours a déjà servi.
+var ErrCodeUtilise = errors.New("ce code de secours a déjà servi")
+
+// ChangerMotDePasseAvecCode fait comme ChangerMotDePasse et grille le code de secours, d'un bloc.
+func (s *Store) ChangerMotDePasseAvecCode(ctx context.Context, id int64, hash, empreinte string) error {
+	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `INSERT INTO codes_secours_utilises (empreinte, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, empreinte, id)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrCodeUtilise
+		}
+		if _, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2 WHERE id = $1`, id, hash); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, id); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM oauth_acces WHERE user_id = $1`, id); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
 func (s *Store) CreateSession(ctx context.Context, tokenHash []byte, userID int64, expires time.Time) error {
 	_, err := s.db.Exec(ctx, `INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)`, tokenHash, userID, expires)
 	return err

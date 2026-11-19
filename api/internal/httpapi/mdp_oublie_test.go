@@ -58,3 +58,33 @@ func TestChangerMotDePasseCourt(t *testing.T) {
 		t.Fatalf("statut %d, attendu 400", w.Code)
 	}
 }
+
+func TestCodeSecours(t *testing.T) {
+	if normaliserCode(" ab-c1 d ") != "ABC1D" {
+		t.Fatal("normalisation du code")
+	}
+	h, _ := hashPassword("ABC1D")
+	s := &Server{CodeSecours: h}
+	cas := []struct {
+		corps  string
+		statut int
+	}{
+		{`{"email":"moi@exemple.fr","mot_de_passe":"0123456789"}`, http.StatusForbidden},
+		{`{"email":"moi@exemple.fr","mot_de_passe":"0123456789","code":"faux"}`, http.StatusForbidden},
+	}
+	for _, c := range cas {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/api/auth/mot-de-passe-oublie", strings.NewReader(c.corps))
+		r.Header.Set("Content-Type", "application/json")
+		s.mdpOublie(w, r)
+		if w.Code != c.statut {
+			t.Errorf("%s : statut %d, attendu %d", c.corps, w.Code, c.statut)
+		}
+	}
+	if !checkPassword(normaliserCode("abc1d"), s.CodeSecours) {
+		t.Fatal("le bon code doit passer")
+	}
+	if CodeSecours == "" || !strings.HasPrefix(CodeSecours, "$argon2id$") {
+		t.Fatal("empreinte du code de secours")
+	}
+}
