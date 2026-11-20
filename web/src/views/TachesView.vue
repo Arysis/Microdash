@@ -3,13 +3,13 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { api } from '../api.js'
 import { demanderConfirmation } from '../confirmation.js'
 import { dateCourte } from '../echeances.js'
-import { projets, nomProjet, listes, duree, lireDuree, aujourdhuiLocal, lundi, semaines, enCours as prevueLe, periode } from '../taches.js'
+import { projets, nomProjet, listes, duree, lireDuree, aujourdhuiLocal, lundi, semaines, enCours as prevueLe, periode, intervalle, nomRythme, rythmes } from '../taches.js'
 
 const taches = ref(null)
 const erreur = ref('')
 const filtre = ref('')
 const jour = aujourdhuiLocal()
-const nouvelle = reactive({ texte: '', quand: 'semaine', debut: jour, fin: jour, semaine: lundi(jour) })
+const nouvelle = reactive({ texte: '', quand: 'semaine', debut: jour, fin: jour, semaine: lundi(jour), repeter: '' })
 const ajout = ref(false)
 const plusTardOuvert = ref(false)
 // Tâche en cours de modification, et sa copie modifiable.
@@ -19,12 +19,60 @@ const enCours = ref(false)
 
 async function charger() {
   try {
-    taches.value = await api.get('/taches')
+    ;[taches.value, recurrentes.value] = await Promise.all([api.get('/taches'), api.get('/taches/recurrentes')])
   } catch (e) {
     erreur.value = e.message
   }
 }
-onMounted(charger)
+onMounted(() => {
+  charger()
+  chargerBilan()
+})
+
+// --- Tâches récurrentes ---
+const recurrentes = ref([])
+
+async function arreter(r) {
+  const ok = await demanderConfirmation({
+    titre: 'Arrêter cette tâche récurrente ?',
+    message: `« ${r.titre} » ne reviendra plus. Les prochaines pas encore faites sont effacées, les autres restent.`,
+    action: 'Arrêter',
+  })
+  if (!ok) return
+  try {
+    await api.del(`/taches/recurrentes/${r.id}`)
+    await charger()
+  } catch (e) {
+    erreur.value = e.message
+  }
+}
+
+// --- Historique : bilan de chaque semaine, calculé par l'API ---
+const bilan = ref(null)
+const nbSemaines = ref(8)
+const erreurBilan = ref('')
+
+async function chargerBilan() {
+  try {
+    bilan.value = (await api.get(`/taches/bilan?semaines=${nbSemaines.value}`)).semaines
+  } catch (e) {
+    erreurBilan.value = e.message
+  }
+}
+
+function plusDeSemaines() {
+  nbSemaines.value = Math.min(nbSemaines.value + 8, 104)
+  chargerBilan()
+}
+
+function resumeSemaine(s) {
+  const morceaux = [`${s.faites.length} ${s.faites.length > 1 ? 'faites' : 'faite'}`]
+  if (s.non_faites.length) morceaux.push(`${s.non_faites.length} ${s.en_cours ? 'à finir' : 'pas faites'}`)
+  if (s.minutes) morceaux.push(duree(s.minutes))
+  return morceaux.join(' · ')
+}
+
+const repartition = (s) => Object.entries(s.par_projet).map(([p, n]) => `${nomProjet(p) || 'Sans projet'} : ${n}`).join(' · ')
 
 const annee = new Date().getFullYear()
 const visibles = computed(() => (taches.value || []).filter((t) => !filtre.value || t.projet === filtre.value))
@@ -46,6 +94,7 @@ function meta(t) {
   if (t.debut) morceaux.push(periode(t, jour))
   if (t.duree_minutes) morceaux.push(duree(t.duree_minutes))
   if (t.echeance) morceaux.push(`avant le ${dateCourte(t.echeance, annee)}`)
+  if (t.source === 'recurrente') morceaux.push('répétée')
   return morceaux.join(' · ')
 }
 
@@ -55,8 +104,13 @@ async function ajouter() {
   ajout.value = true
   erreur.value = ''
   try {
-    const t = await api.post('/taches', { titre, duree_minutes: m, projet: filtre.value, ...periodeDe(nouvelle) })
-    taches.value = [...taches.value, t]
+    if (nouvelle.quand === 'dates' && nouvelle.repeter) {
+      await api.post('/taches/recurrentes', { titre, duree_minutes: m, projet: filtre.value, rythme: nouvelle.repeter, depuis: nouvelle.debut })
+      await charger()
+    } else {
+      const t = await api.post('/taches', { titre, duree_minutes: m, projet: filtre.value, ...periodeDe(nouvelle) })
+      taches.value = [...taches.value, t]
+    }
     nouvelle.texte = ''
   } catch (e) {
     erreur.value = e.message
@@ -93,6 +147,7 @@ async function cocher(t) {
   remplacer({ ...t, faite: !t.faite })
   try {
     remplacer(await api.put(`/taches/${t.id}`, { ...corps(versBrouillon(t)), faite: !t.faite }))
+    chargerBilan()
   } catch (e) {
     remplacer(avant)
     erreur.value = e.message
@@ -151,8 +206,14 @@ async function supprimer(t) {
         <button v-for="l in listes" :key="l.quand" type="button" :class="{ actif: nouvelle.quand === l.quand }" :aria-pressed="nouvelle.quand === l.quand" @click="nouvelle.quand = l.quand">{{ l.court || l.nom }}</button>
       </div>
       <div v-if="nouvelle.quand === 'dates'" class="ligne">
-        <label>Du <input v-model="nouvelle.debut" type="date" required /></label>
-        <label>Au <input v-model="nouvelle.fin" type="date" :min="nouvelle.debut" required /></label>
+        <label>{{ nouvelle.repeter ? 'À partir du' : 'Du' }} <input v-model="nouvelle.debut" type="date" required /></label>
+        <label v-if="!nouvelle.repeter">Au <input v-model="nouvelle.fin" type="date" :min="nouvelle.debut" required /></label>
+        <label>Répéter
+          <select v-model="nouvelle.repeter">
+            <option value="">Jamais</option>
+            <option v-for="r in rythmes" :key="r.code" :value="r.code">{{ nomRythme(r.code, nouvelle.debut) }}</option>
+          </select>
+        </label>
       </div>
       <label v-else-if="nouvelle.quand === 'semaine'">Semaine
         <select v-model="nouvelle.semaine">
@@ -228,6 +289,42 @@ async function supprimer(t) {
         </ul>
       </template>
     </section>
+
+    <section v-if="recurrentes.length" class="carte liste-taches" aria-labelledby="titre-recurrentes">
+      <div class="titre-ligne"><h2 id="titre-recurrentes">Récurrentes</h2></div>
+      <ul>
+        <li v-for="r in recurrentes" :key="r.id">
+          <span class="corps statique">
+            <span class="titre">{{ r.titre }}</span>
+            <small>{{ [nomRythme(r.rythme, r.depuis), nomProjet(r.projet), duree(r.duree_minutes)].filter(Boolean).join(' · ') }}</small>
+          </span>
+          <button class="lien-bouton danger" :aria-label="`Arrêter « ${r.titre} »`" @click="arreter(r)">Arrêter</button>
+        </li>
+      </ul>
+    </section>
+
+    <section class="carte historique" aria-labelledby="titre-historique">
+      <h2 id="titre-historique">Historique</h2>
+      <p class="aide">Le bilan de chaque semaine se fait tout seul : ce que tu as fait, et ce qui n'a pas été fait à temps.</p>
+      <p v-if="erreurBilan" class="erreur" role="alert">{{ erreurBilan }}</p>
+      <details v-for="s in bilan || []" :key="s.lundi" :open="s.en_cours">
+        <summary>
+          <span class="titre">{{ s.en_cours ? 'Cette semaine' : `Semaine ${intervalle(s.lundi, s.dimanche)}` }}</span>
+          <small>{{ resumeSemaine(s) }}</small>
+        </summary>
+        <p v-if="Object.keys(s.par_projet).length" class="aide">{{ repartition(s) }}</p>
+        <h3 v-if="s.faites.length">Faites</h3>
+        <ul v-if="s.faites.length" class="bilan">
+          <li v-for="t in s.faites" :key="`f${t.id}`">{{ t.titre }}<small v-if="t.projet || t.duree_minutes"> · {{ [nomProjet(t.projet), duree(t.duree_minutes)].filter(Boolean).join(' · ') }}</small></li>
+        </ul>
+        <h3 v-if="s.non_faites.length">{{ s.en_cours ? 'À finir cette semaine' : 'Pas faites à temps' }}</h3>
+        <ul v-if="s.non_faites.length" class="bilan pas-faites">
+          <li v-for="t in s.non_faites" :key="`n${t.id}`">{{ t.titre }}<small> · {{ t.faite_le ? `faite le ${dateCourte(t.faite_le, annee)}` : `prévue jusqu'au ${dateCourte(t.fin, annee)}` }}</small></li>
+        </ul>
+        <p v-if="!s.faites.length && !s.non_faites.length" class="vide">Rien pour l'instant.</p>
+      </details>
+      <button v-if="bilan && nbSemaines < 104" class="lien-bouton" @click="plusDeSemaines">Semaines d'avant</button>
+    </section>
   </div>
 </template>
 
@@ -259,6 +356,15 @@ async function supprimer(t) {
 .titre { font-weight: 500; overflow-wrap: anywhere; }
 .faite .titre { text-decoration: line-through; color: var(--pierre); }
 .ouvrir { flex-shrink: 0; }
+.statique { cursor: default; }
+.historique { display: grid; gap: var(--e2); }
+.historique h2 { margin: 0; }
+.historique details { border-top: 1px solid var(--lin); padding: var(--e2) 0; }
+.historique summary { display: grid; gap: 2px; min-height: 44px; align-content: center; cursor: pointer; list-style-position: inside; }
+.historique summary small { color: var(--pierre); font-size: 13px; padding-left: var(--e4); }
+.historique h3 { font: 600 14px var(--police-texte); margin: var(--e3) 0 var(--e1); color: var(--pierre); }
+.bilan { margin: 0; padding-left: var(--e5); display: grid; gap: var(--e1); }
+.bilan small { color: var(--pierre); }
 .edition { flex: 1; display: grid; gap: var(--e3); padding: var(--e3) 0; }
 .boutons-edition { display: flex; gap: var(--e2); align-items: center; }
 .boutons-edition .lien-bouton { margin-right: auto; }

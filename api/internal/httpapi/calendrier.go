@@ -60,6 +60,12 @@ func (s *Server) evenements(ctx context.Context, uid int64, du, au time.Time) ([
 	return res, indisponibles, nil
 }
 
+// EvenementsCompte sert aux notifications : l'agenda d'un compte, modules actifs seulement.
+func (s *Server) EvenementsCompte(ctx context.Context, uid int64, du, au time.Time) ([]modules.Evenement, error) {
+	evs, _, err := s.evenements(ctx, uid, du, au)
+	return evs, err
+}
+
 func (s *Server) getCalendrier(w http.ResponseWriter, r *http.Request) {
 	du, err1 := time.Parse(formatDate, r.URL.Query().Get("du"))
 	au, err2 := time.Parse(formatDate, r.URL.Query().Get("au"))

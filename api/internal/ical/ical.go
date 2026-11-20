@@ -39,6 +39,9 @@ func Ecrire(nom string, evs []Evenement, maintenant time.Time) string {
 	ligne("METHOD:PUBLISH")
 	ligne("X-WR-CALNAME:" + echapper(nom))
 	ligne("X-WR-TIMEZONE:Europe/Paris")
+	// Demande aux calendriers abonnés (Apple, Outlook, Thunderbird) de relire le flux chaque heure.
+	ligne("REFRESH-INTERVAL;VALUE=DURATION:PT1H")
+	ligne("X-PUBLISHED-TTL:PT1H")
 	stamp := maintenant.UTC().Format("20060102T150405Z")
 	for _, e := range evs {
 		ligne("BEGIN:VEVENT")

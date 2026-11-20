@@ -4,6 +4,8 @@ Application web (PWA) pour gérer une micro-entreprise française au même endro
 
 Les montants sont des **estimations** : seule la déclaration URSSAF fait foi.
 
+**Guide utilisateur** : [`api/guide/GUIDE.md`](api/guide/GUIDE.md) liste toutes les fonctionnalités. Il est affiché dans l'app (Plus › Aide) et lu par Claude (outil MCP `lire_guide`). Chaque PR qui change une fonctionnalité le met à jour (voir `CLAUDE.md`).
+
 ## Lancer en local
 
 Prérequis : Docker avec Docker Compose.
@@ -111,9 +113,28 @@ Chaque source est un module (`api/internal/modules`). Un module donne son code, 
 
 Chacun peut désactiver un module dans Plus › Réglages : il quitte « Ce soir » et le menu, ses données restent.
 
-### Agenda dans Home Assistant
+### Abonnement calendrier (iCal)
 
-Dans l'app, Agenda › « Dans Home Assistant » › Créer le lien. Le lien (secret, montré une seule fois) sert un flux iCal : rendez-vous, tâches datées et échéances, de deux mois en arrière à un an en avant. Dans Home Assistant : Paramètres › Appareils et services › Ajouter une intégration › **Remote Calendar**, et coller le lien. Le même lien s'ajoute au calendrier du téléphone (abonnement par URL). « Changer le lien » coupe l'ancien.
+Dans l'app, Agenda › « Abonnement calendrier » › Créer le lien. Le lien (secret, montré une seule fois) sert un flux iCal : rendez-vous, tâches datées (chaque soir de leur période) et échéances, de deux mois en arrière à un an en avant. Les tâches « Plus tard » n'ont pas de date et n'y sont pas. Le flux demande aux calendriers de le relire chaque heure ; Google Agenda le relit à son rythme (quelques fois par jour).
+
+- **Google Agenda** : bouton « Google Agenda », ou sur ordinateur « Autres agendas », +, « À partir de l'URL ».
+- **iPhone, Mac** : bouton « Ouvrir dans mon calendrier » (lien `webcal://`), ou Réglages › Calendrier › Comptes › Ajouter un compte › Autre › « Ajouter un calendrier avec abonnement ».
+- **Outlook** : Ajouter un calendrier › « S'abonner à partir du web ».
+- **Home Assistant** : Paramètres › Appareils et services › Ajouter une intégration › **Remote Calendar**, et coller le lien.
+
+« Changer le lien » coupe l'ancien.
+
+### Notifications push
+
+**Tout est coupé par défaut.** Compte › Notifications › « Sur cet appareil », sur chaque appareil : PC (Chrome, Edge, Firefox, Safari) et téléphone. Sur Android, l'app installée ou le navigateur suffisent. Sur iPhone et iPad (iOS 16.4 ou plus), il faut d'abord installer l'app : Safari › Partager › « Sur l'écran d'accueil », puis activer les notifications depuis l'app installée.
+
+Puis coche ce que tu veux recevoir (chaque réglage se coupe de la même façon) :
+
+- **Ta soirée** : chaque jour à l'heure choisie (18 h proposé), les tâches du jour, les échéances et les rendez-vous de la soirée. Rien n'est envoyé s'il n'y a rien.
+- **Avant un rendez-vous** : pour chaque rendez-vous à heure fixe de l'agenda, de 0 à 2 h avant (15 min proposé).
+- « Envoyer un essai » vérifie que tout marche ; la liste des appareils permet d'en retirer un.
+
+Rien à configurer côté serveur, et aucun service payant : l'API envoie elle-même les notifications aux services de push des navigateurs (Web Push, chiffrées de bout en bout), avec une clé VAPID créée au premier démarrage et gardée en base (table `push_cle`). Si cette clé est effacée, chaque appareil doit réactiver les notifications. Un appareil que son navigateur a désabonné est oublié au premier envoi. Après un redémarrage de l'API, une notification en retard part encore (jusqu'à 3 h pour la soirée, 10 min après le début d'un rendez-vous).
 
 ### Mails (Gmail)
 
@@ -138,7 +159,7 @@ Microdash sert un serveur MCP sur `/mcp` : on l'ajoute dans Claude comme connect
 2. Dans Claude : Paramètres > Connecteurs > Ajouter un connecteur personnalisé, nom « Microdash », colle l'adresse.
 3. Claude ouvre la page « Autoriser Claude » de Microdash : connecte-toi si besoin, puis Autoriser.
 
-Outils : `ce_soir`, `lister_taches`, `ajouter_tache`, `modifier_tache`, `terminer_tache`, `supprimer_tache`, `agenda`, `ajouter_rendez_vous`, `supprimer_rendez_vous`, `marquer_echeance`, `resume_finances`, `lire_veille`, `lire_mails_non_lus`, `marquer_mails_lus`. Rien sur les saisies, Qonto, Stripe ni le compte. Des mails, Claude lit seulement la copie déjà faite par Microdash (texte de la veille, début des autres non lus) et peut les marquer lus. La page « Commandes Claude » (`/claude`, menu Plus) les explique avec des exemples de phrases.
+Outils : `lire_guide` (le guide utilisateur), `ce_soir`, `lister_taches`, `ajouter_tache`, `modifier_tache`, `terminer_tache`, `supprimer_tache`, `agenda`, `ajouter_rendez_vous`, `supprimer_rendez_vous`, `marquer_echeance`, `resume_finances`, `lire_veille`, `lire_mails_non_lus`, `marquer_mails_lus`. Rien sur les saisies, Qonto, Stripe ni le compte. Des mails, Claude lit seulement la copie déjà faite par Microdash (texte de la veille, début des autres non lus) et peut les marquer lus. La page « Commandes Claude » (`/claude`, menu Plus) les explique avec des exemples de phrases.
 
 Sécurité : OAuth 2.1 (enregistrement automatique du client, PKCE S256). Seules les adresses de retour `https://claude.ai/…` et `https://claude.com/…` sont acceptées. Jetons hachés en base : accès d'une heure, renouvellement de 90 jours changé à chaque usage. « Couper l'accès de Claude » (page Compte) ou un changement de mot de passe les invalide tous. `SITE_URL` doit être l'adresse publique exacte du site : elle sert d'émetteur OAuth et d'adresse du serveur MCP.
 
@@ -192,7 +213,7 @@ Un débit dont le libellé contient « URSSAF » est proposé au poste URSSAF, p
 
 | Dossier | Contenu |
 | --- | --- |
-| `api/` | API Go : comptes, profil, transactions, calculs et agenda (`internal/calc`), rappels par e-mail (`internal/alertes`), exports CSV et PDF (`internal/exports`, police IBM Plex Sans sous licence OFL) |
+| `api/` | API Go : comptes, profil, transactions, calculs et agenda (`internal/calc`), rappels par e-mail (`internal/alertes`), notifications push (`internal/notifs`, `internal/webpush`), exports CSV et PDF (`internal/exports`, police IBM Plex Sans sous licence OFL) |
 | `api/baremes/` | Taux, plafonds, règles et dates de l'agenda par année (`2026.yaml`) |
 | `web/` | PWA Vue 3 + Vite, servie par Nginx qui relaie `/api` vers l'API |
 | `DESIGN.md` | Couleurs, polices, formes, icônes, mouvement et ton des textes : à suivre pour tout changement d'interface |

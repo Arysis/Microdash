@@ -26,7 +26,9 @@ import (
 	"github.com/arysis/microdash/api/internal/modules/finances"
 	"github.com/arysis/microdash/api/internal/modules/mails"
 	"github.com/arysis/microdash/api/internal/modules/taches"
+	"github.com/arysis/microdash/api/internal/notifs"
 	"github.com/arysis/microdash/api/internal/store"
+	"github.com/arysis/microdash/api/internal/webpush"
 )
 
 func main() {
@@ -103,7 +105,12 @@ func run() error {
 	if api.Chiffre != nil {
 		go api.Mails.Planifier(ctx)
 	}
+	if api.Notifs, err = notifications(ctx, st, api); err != nil {
+		return err
+	}
+	go api.Notifs.Planifier(ctx)
 	go genererRecurrentes(ctx, st)
+	go genererTachesRecurrentes(ctx, st)
 
 	srv := &http.Server{
 		Addr:              ":" + env("PORT", "8080"),
@@ -165,6 +172,50 @@ func lancerAlertes(ctx context.Context, st *store.Store, set *bareme.Set, sig al
 	slog.Info("rappels par e-mail activés", "chaque_jour", "8 h, heure de Paris", "limites_a", len(limiter))
 	go svc.Planifier(ctx)
 	return nil
+}
+
+// genererTachesRecurrentes crée les tâches des tâches récurrentes, au démarrage puis chaque
+// heure : la tâche du jour existe dès minuit passé, quel que soit l'horaire du redémarrage.
+func genererTachesRecurrentes(ctx context.Context, st *store.Store) {
+	for {
+		if err := taches.GenererRecurrentes(ctx, st, 0, alertes.Aujourdhui(time.Now())); err != nil {
+			slog.Error("tâches récurrentes", "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Until(time.Now().Truncate(time.Hour).Add(time.Hour + time.Minute))):
+		}
+	}
+}
+
+// notifications prépare l'envoi des notifications push. La clé VAPID est créée au premier
+// démarrage et gardée en base : rien à configurer, et aucun service payant.
+func notifications(ctx context.Context, st *store.Store, api *httpapi.Server) (*notifs.Service, error) {
+	der, err := st.CleVAPID(ctx, func() ([]byte, error) {
+		c, err := webpush.NouvellesCles()
+		if err != nil {
+			return nil, err
+		}
+		return c.Exporter()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("clé des notifications : %w", err)
+	}
+	cles, err := webpush.Importer(der)
+	if err != nil {
+		return nil, fmt.Errorf("clé des notifications : %w", err)
+	}
+	// Contact donné aux services de push (Apple l'exige) : l'adresse du site.
+	sujet := api.SiteURL
+	if !strings.HasPrefix(sujet, "https://") {
+		sujet = "mailto:notifications@microdash.local"
+	}
+	slog.Info("notifications push activées")
+	return &notifs.Service{
+		Donnees: st, Push: &webpush.Envoyeur{Cles: cles, Sujet: sujet},
+		Agenda: api.EvenementsCompte, ClePublique: cles.Publique(),
+	}, nil
 }
 
 // genererRecurrentes crée, au démarrage puis chaque jour à 8 h (Paris), les saisies des dépenses
