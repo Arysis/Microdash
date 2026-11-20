@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"github.com/arysis/microdash/api/guide"
+
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -101,10 +103,16 @@ func TestOutilsMCP(t *testing.T) {
 		}
 	}
 	slices.Sort(noms)
-	attendus := []string{"agenda", "ajouter_rendez_vous", "ajouter_tache", "ce_soir", "lire_mails_non_lus", "lire_veille", "lister_taches", "marquer_echeance",
+	attendus := []string{"agenda", "ajouter_rendez_vous", "ajouter_tache", "ce_soir", "lire_guide", "lire_mails_non_lus", "lire_veille", "lister_taches", "marquer_echeance",
 		"marquer_mails_lus", "modifier_tache", "resume_finances", "supprimer_rendez_vous", "supprimer_tache", "terminer_tache"}
 	if !slices.Equal(noms, attendus) {
 		t.Fatalf("outils : %v", noms)
+	}
+	// Chaque outil est décrit dans le guide utilisateur (voir CLAUDE.md).
+	for _, n := range noms {
+		if !strings.Contains(guide.Texte, "`"+n+"`") {
+			t.Errorf("outil %s absent de api/guide/GUIDE.md", n)
+		}
 	}
 	// Sans jeton (transport en mémoire), un outil refuse de s'exécuter.
 	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "ce_soir", Arguments: map[string]any{}})

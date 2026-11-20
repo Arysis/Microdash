@@ -86,7 +86,7 @@ const retirer = (a) => appel(async () => {
     <template v-else-if="infos">
       <p class="aide">
         Sur ton PC et ton téléphone, même app fermée : le résumé de ta soirée et un rappel avant tes rendez-vous.
-        Active-les sur chaque appareil.
+        Tout est coupé par défaut : active-les sur chaque appareil, puis choisis ce que tu veux recevoir.
       </p>
 
       <label v-if="etat === 'ok'" class="interrupteur">
@@ -101,6 +101,9 @@ const retirer = (a) => appel(async () => {
         Les notifications sont bloquées pour Microdash dans ce navigateur. Autorise-les dans les réglages du site (le cadenas à gauche de l'adresse), puis recharge la page.
       </p>
       <p v-else class="encart">Ce navigateur ne reçoit pas de notifications push. Essaie Chrome, Edge, Firefox ou Safari à jour.</p>
+      <p v-if="etat === 'ok' && ici && !infos.preferences.soiree && !infos.preferences.rendez_vous" class="encart">
+        Cet appareil est prêt, mais rien n'est choisi : coche ci-dessous ce que tu veux recevoir.
+      </p>
 
       <label class="interrupteur">
         <span>Ta soirée<small class="aide">Tes tâches, échéances et rendez-vous du soir, chaque jour s'il y en a.</small></span>

@@ -11,6 +11,9 @@ import (
 	"github.com/arysis/microdash/api/internal/webpush"
 )
 
+// tout : les deux notifications activées, à 18 h et 15 min avant.
+var tout = store.PreferencesNotifications{Soiree: true, HeureSoiree: "18:00", RendezVous: true, Avance: 15}
+
 func a(jour, heure string) time.Time {
 	t, _ := aHeure(jour, heure)
 	return t
@@ -28,7 +31,7 @@ var agenda = []modules.Evenement{
 }
 
 func TestSoiree(t *testing.T) {
-	p := store.PreferencesNotificationsDefaut // 18:00, rendez-vous 15 min avant
+	p := tout
 	if ns := Choisir(agenda, p, a("2026-11-20", "17:59")); len(ns) != 0 {
 		t.Fatalf("avant l'heure : %+v", ns)
 	}
@@ -63,7 +66,7 @@ func TestSoiree(t *testing.T) {
 }
 
 func TestRendezVous(t *testing.T) {
-	p := store.PreferencesNotificationsDefaut
+	p := tout
 	p.Soiree = false
 	if ns := Choisir(agenda, p, a("2026-11-20", "20:14")); len(ns) != 0 {
 		t.Fatalf("trop tôt : %+v", ns)
@@ -113,8 +116,11 @@ func (f *fausseBase) Abonnements(_ context.Context, uid int64) ([]store.Abonneme
 	}
 	return res, nil
 }
-func (f *fausseBase) PreferencesNotifications(context.Context, int64) (store.PreferencesNotifications, error) {
-	return store.PreferencesNotificationsDefaut, nil
+func (f *fausseBase) PreferencesNotifications(_ context.Context, uid int64) (store.PreferencesNotifications, error) {
+	if uid == 6 {
+		return store.PreferencesNotificationsDefaut, nil // rien choisi : tout coupé
+	}
+	return tout, nil
 }
 func (f *fausseBase) ReserverNotification(_ context.Context, _ int64, cle string) (bool, error) {
 	if f.envoyees[cle] {
@@ -158,9 +164,13 @@ func (p *fauxPush) Envoyer(_ context.Context, ab webpush.Abonnement, _ []byte, _
 func TestService(t *testing.T) {
 	base := &fausseBase{envoyees: map[string]bool{}, erreurs: map[int64]string{}, abs: []store.AbonnementPush{
 		{ID: 1, UserID: 5, Endpoint: "pc"}, {ID: 2, UserID: 5, Endpoint: "telephone"}, {ID: 3, UserID: 5, Endpoint: "vieux"},
+		{ID: 4, UserID: 6, Endpoint: "defaut"},
 	}}
 	push := &fauxPush{recus: map[string]int{}, reponse: map[string]error{"vieux": webpush.ErrExpire}}
 	svc := &Service{Donnees: base, Push: push, Agenda: func(_ context.Context, uid int64, du, au time.Time) ([]modules.Evenement, error) {
+		if uid == 6 {
+			t.Error("compte sans notification choisie : agenda lu quand même")
+		}
 		if uid != 5 || du.Format("2006-01-02") != "2026-11-20" || au.Format("2006-01-02") != "2026-11-21" {
 			t.Errorf("agenda demandé : %d %v %v", uid, du, au)
 		}
@@ -172,13 +182,16 @@ func TestService(t *testing.T) {
 		}
 	}
 	// Une seule fois par appareil, l'appareil expiré oublié.
+	if push.recus["defaut"] != 0 {
+		t.Error("notification envoyée sans l'avoir choisie")
+	}
 	if push.recus["pc"] != 1 || push.recus["telephone"] != 1 || len(base.oublies) != 1 || base.oublies[0] != 3 {
 		t.Errorf("reçus %v, oubliés %v", push.recus, base.oublies)
 	}
 
 	// Aucun appareil atteint : la réservation est levée pour réessayer.
 	push.reponse = map[string]error{"pc": errTest, "telephone": errTest}
-	base.abs = base.abs[:2]
+	base.abs = base.abs[:2] // l'appareil expiré est oublié, le compte 6 ne compte plus
 	if err := svc.Tourner(context.Background(), a("2026-11-20", "20:15")); err != nil {
 		t.Fatal(err)
 	}

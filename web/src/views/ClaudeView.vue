@@ -45,6 +45,13 @@ const groupes = [
     ],
   },
   {
+    titre: 'Aide',
+    commandes: [
+      { outil: 'lire_guide', titre: 'Lire le guide', aide: 'Tout ce que fait Microdash, le même texte que la page Aide. Claude le lit avant de te proposer une nouveauté.',
+        exemples: ['Est-ce que Microdash sait envoyer des notifications ?', "Rappelle-moi tout ce que fait Microdash."] },
+    ],
+  },
+  {
     titre: 'Finances',
     commandes: [
       { outil: 'resume_finances', titre: 'Résumé des finances', aide: "Chiffre d'affaires, cotisations, dépenses, revenu net, plafonds et trésorerie de l'année.",

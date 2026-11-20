@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"github.com/arysis/microdash/api/guide"
+
 	"bytes"
 	"context"
 	"encoding/json"
@@ -32,6 +34,7 @@ import (
 const instructionsMCP = `Microdash gère l'activité d'un micro-entrepreneur français : tâches, agenda (rendez-vous, échéances URSSAF et impôts) et finances.
 Les dates sont au format AAAA-MM-JJ, à l'heure de Paris ; chaque réponse donne « aujourdhui ». « Ce soir » ou « aujourd'hui » = la date du jour.
 Avant de modifier, terminer ou supprimer une tâche ou un rendez-vous, retrouve son id avec lister_taches ou agenda.
+Pour savoir ce que Microdash sait faire (pages, réglages, Home Assistant, abonnement calendrier, notifications…), lis le guide avec lire_guide avant de répondre ou de proposer une nouvelle fonctionnalité.
 Mails : lire_veille donne le texte des mails de veille technologique, lire_mails_non_lus les autres mails non lus (expéditeur, sujet, début du texte). Après avoir donné ton résumé, marque comme lus, avec marquer_mails_lus, uniquement les mails que tu as résumés, par leur ref.`
 
 // enregistreur garde la réponse d'un handler appelé en interne.
@@ -219,6 +222,12 @@ type entreeFinances struct {
 func (s *Server) serveurMCP() *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{Name: "microdash", Title: "Microdash", Version: "1.0.0"},
 		&mcp.ServerOptions{Instructions: instructionsMCP})
+
+	outil(s, srv, &mcp.Tool{Name: "lire_guide", Annotations: lecture("Lire le guide"),
+		Description: "Le guide utilisateur de Microdash (Markdown) : toutes les fonctionnalités, où les trouver et comment les régler. À lire pour répondre à « est-ce que Microdash sait faire… ? » ou avant de proposer une nouvelle fonctionnalité."},
+		func(ctx context.Context, uid int64, _ entreeVide) (any, error) {
+			return map[string]string{"guide": guide.Texte}, nil
+		})
 
 	outil(s, srv, &mcp.Tool{Name: "ce_soir", Annotations: lecture("Ce soir"),
 		Description: "La liste « Ce soir » de Microdash : tâches à faire ce soir, échéances proches et rappels des modules actifs."},

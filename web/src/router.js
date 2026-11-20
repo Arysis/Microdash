@@ -25,6 +25,7 @@ const routes = [
   { path: '/profil', component: () => import('./views/ProfilView.vue'), meta: { acces: 'membre', titre: 'Ton activité', groupe: 'plus' } },
   { path: '/compte', component: () => import('./views/CompteView.vue'), meta: { acces: 'membre', titre: 'Compte', groupe: 'plus' } },
   { path: '/claude', component: () => import('./views/ClaudeView.vue'), meta: { acces: 'membre', titre: 'Commandes Claude', groupe: 'plus' } },
+  { path: '/aide', component: () => import('./views/AideView.vue'), meta: { acces: 'membre', titre: 'Aide', groupe: 'plus' } },
   { path: '/plus', component: () => import('./views/PlusView.vue'), meta: { acces: 'membre', titre: 'Plus', groupe: 'plus' } },
   { path: '/reglages', component: () => import('./views/ReglagesView.vue'), meta: { acces: 'membre', titre: 'Réglages', groupe: 'plus' } },
   // Anciennes adresses du socle.

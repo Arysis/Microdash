@@ -22,6 +22,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/arysis/microdash/api/guide"
 	"github.com/arysis/microdash/api/internal/alertes"
 	"github.com/arysis/microdash/api/internal/bareme"
 	"github.com/arysis/microdash/api/internal/calc"
@@ -142,6 +143,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/calendrier/flux", s.getFlux)
 			r.Post("/calendrier/flux", s.changerFlux)
 			r.Delete("/calendrier/flux", s.supprimerFlux)
+			r.Get("/guide", s.getGuide)
 			r.Get("/notifications", s.getNotifications)
 			r.Post("/notifications/abonnements", s.abonnerNotifications)
 			r.Post("/notifications/desabonner", s.desabonnerNotifications)
@@ -221,6 +223,12 @@ func exigerJSON(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// getGuide sert le guide utilisateur (Markdown) à la page Aide.
+func (s *Server) getGuide(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	_, _ = w.Write([]byte(guide.Texte))
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

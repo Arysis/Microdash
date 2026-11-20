@@ -109,8 +109,9 @@ type PreferencesNotifications struct {
 	Avance      int    `json:"avance"`       // minutes avant le rendez-vous
 }
 
-// PreferencesNotificationsDefaut sert tant que la personne n'a rien changé.
-var PreferencesNotificationsDefaut = PreferencesNotifications{Soiree: true, HeureSoiree: "18:00", RendezVous: true, Avance: 15}
+// PreferencesNotificationsDefaut sert tant que la personne n'a rien changé : tout est coupé,
+// c'est à elle de choisir ce qu'elle veut recevoir.
+var PreferencesNotificationsDefaut = PreferencesNotifications{Soiree: false, HeureSoiree: "18:00", RendezVous: false, Avance: 15}
 
 func (s *Store) PreferencesNotifications(ctx context.Context, userID int64) (PreferencesNotifications, error) {
 	p := PreferencesNotificationsDefaut
