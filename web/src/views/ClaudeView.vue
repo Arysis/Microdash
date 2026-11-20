@@ -17,6 +17,8 @@ const groupes = [
         exemples: ["C'est fait pour Relancer Paul."] },
       { outil: 'supprimer_tache', titre: 'Supprimer une tâche', aide: 'Claude te demande confirmation avant.',
         exemples: ['Supprime la tâche « Tester la démo ».'] },
+      { outil: 'bilan_taches', titre: 'Bilan des semaines', aide: 'Les tâches faites et pas faites à temps, semaine par semaine, avec le temps passé par projet.',
+        exemples: ['Fais-moi le bilan de ma semaine.', "Qu'est-ce que j'ai laissé de côté ce mois-ci ?"] },
     ],
   },
   {

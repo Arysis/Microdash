@@ -30,6 +30,8 @@ export default defineConfig({
         theme_color: couleurs.safran,
         background_color: couleurs.papier,
         display: 'standalone',
+        // Capture rapide : Microdash apparaît dans le menu Partager du téléphone (app installée).
+        share_target: { action: '/partager', method: 'GET', params: { title: 'title', text: 'text', url: 'url' } },
         start_url: '/tableau-de-bord',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },

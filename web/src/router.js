@@ -25,6 +25,7 @@ const routes = [
   { path: '/profil', component: () => import('./views/ProfilView.vue'), meta: { acces: 'membre', titre: 'Ton activité', groupe: 'plus' } },
   { path: '/compte', component: () => import('./views/CompteView.vue'), meta: { acces: 'membre', titre: 'Compte', groupe: 'plus' } },
   { path: '/claude', component: () => import('./views/ClaudeView.vue'), meta: { acces: 'membre', titre: 'Commandes Claude', groupe: 'plus' } },
+  { path: '/partager', component: () => import('./views/PartagerView.vue'), meta: { acces: 'membre', titre: 'Nouvelle tâche', noindex: true } },
   { path: '/aide', component: () => import('./views/AideView.vue'), meta: { acces: 'membre', titre: 'Aide', groupe: 'plus' } },
   { path: '/plus', component: () => import('./views/PlusView.vue'), meta: { acces: 'membre', titre: 'Plus', groupe: 'plus' } },
   { path: '/reglages', component: () => import('./views/ReglagesView.vue'), meta: { acces: 'membre', titre: 'Réglages', groupe: 'plus' } },
@@ -51,7 +52,8 @@ router.beforeEach(async (to) => {
   if (to.meta.acces === 'invite' && connecte) return suiteSure(to.query.suite) || '/ce-soir'
   if (to.meta.acces === 'connecte' && !connecte) return { path: '/connexion', query: { suite: to.fullPath } }
   if (to.meta.acces === 'membre') {
-    if (!connecte) return '/connexion'
+    // Une capture (Partager › Microdash) reprend après la connexion.
+    if (!connecte) return to.path === '/partager' ? { path: '/connexion', query: { suite: to.fullPath } } : '/connexion'
     if (!session.modules) await chargerModules()
     // Tant que le profil n'est pas renseigné, aucun calcul n'est possible.
     if (!session.user.profil_complet && to.path !== '/profil') return '/profil'

@@ -110,6 +110,7 @@ func run() error {
 	}
 	go api.Notifs.Planifier(ctx)
 	go genererRecurrentes(ctx, st)
+	go genererTachesRecurrentes(ctx, st)
 
 	srv := &http.Server{
 		Addr:              ":" + env("PORT", "8080"),
@@ -171,6 +172,21 @@ func lancerAlertes(ctx context.Context, st *store.Store, set *bareme.Set, sig al
 	slog.Info("rappels par e-mail activés", "chaque_jour", "8 h, heure de Paris", "limites_a", len(limiter))
 	go svc.Planifier(ctx)
 	return nil
+}
+
+// genererTachesRecurrentes crée les tâches des tâches récurrentes, au démarrage puis chaque
+// heure : la tâche du jour existe dès minuit passé, quel que soit l'horaire du redémarrage.
+func genererTachesRecurrentes(ctx context.Context, st *store.Store) {
+	for {
+		if err := taches.GenererRecurrentes(ctx, st, 0, alertes.Aujourdhui(time.Now())); err != nil {
+			slog.Error("tâches récurrentes", "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Until(time.Now().Truncate(time.Hour).Add(time.Hour + time.Minute))):
+		}
+	}
 }
 
 // notifications prépare l'envoi des notifications push. La clé VAPID est créée au premier

@@ -213,6 +213,10 @@ type entreeMarquerLus struct {
 	Refs []string `json:"refs" jsonschema:"les ref des mails à marquer comme lus dans Gmail (lire_veille ou lire_mails_non_lus), 200 au plus"`
 }
 
+type entreeBilan struct {
+	Semaines int `json:"semaines,omitempty" jsonschema:"nombre de semaines, de la semaine en cours aux plus anciennes (par défaut 4, au plus 52)"`
+}
+
 type entreeFinances struct {
 	Annee int `json:"annee,omitempty" jsonschema:"année civile ; par défaut l'année en cours"`
 }
@@ -304,6 +308,20 @@ func (s *Server) serveurMCP() *mcp.Server {
 		func(ctx context.Context, uid int64, in entreeID) (any, error) {
 			err := s.appeler(ctx, uid, s.deleteTache, appel{methode: http.MethodDelete, params: idParams(in.ID)}, nil)
 			return map[string]any{"supprimee": err == nil, "id": in.ID}, err
+		})
+
+	outil(s, srv, &mcp.Tool{Name: "bilan_taches", Annotations: lecture("Bilan des semaines"),
+		Description: "Le bilan des tâches semaine par semaine (lundi-dimanche), de la semaine en cours aux plus anciennes : tâches faites (cochées dans la semaine), tâches pas faites à temps (période finie dans la semaine sans être cochée ; faite_le si faite plus tard), minutes faites et nombre de tâches faites par projet. Les semaines vides sont omises."},
+		func(ctx context.Context, uid int64, in entreeBilan) (any, error) {
+			n := in.Semaines
+			if n <= 0 {
+				n = 4
+			}
+			if n > 52 {
+				n = 52
+			}
+			res, err := s.bilan(ctx, uid, n)
+			return map[string]any{"aujourdhui": s.aujourdhui().Format(formatDate), "semaines": res}, err
 		})
 
 	outil(s, srv, &mcp.Tool{Name: "agenda", Annotations: lecture("Lire l'agenda"),

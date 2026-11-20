@@ -103,7 +103,7 @@ func TestOutilsMCP(t *testing.T) {
 		}
 	}
 	slices.Sort(noms)
-	attendus := []string{"agenda", "ajouter_rendez_vous", "ajouter_tache", "ce_soir", "lire_guide", "lire_mails_non_lus", "lire_veille", "lister_taches", "marquer_echeance",
+	attendus := []string{"agenda", "ajouter_rendez_vous", "ajouter_tache", "bilan_taches", "ce_soir", "lire_guide", "lire_mails_non_lus", "lire_veille", "lister_taches", "marquer_echeance",
 		"marquer_mails_lus", "modifier_tache", "resume_finances", "supprimer_rendez_vous", "supprimer_tache", "terminer_tache"}
 	if !slices.Equal(noms, attendus) {
 		t.Fatalf("outils : %v", noms)

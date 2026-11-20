@@ -18,6 +18,10 @@ Tes tâches par projet : Educari, SaaS, Microdash, perso.
 - **Par dates** (du … au …) : la tâche est à faire chaque soir de sa période. Elle s'affiche ces jours-là dans l'agenda et dans « Ta soirée ».
 - **Par semaine** (du lundi au dimanche) ou **Plus tard** (sans date).
 - **Durée** : écris-la à la fin du titre (« Relancer Paul 15 min », « Compta 1 h 30 ») ; elle compte dans « Ta soirée ».
+- **Tâches récurrentes** : dans le formulaire d'ajout, liste « Dates », choisis « Répéter » : chaque jour, chaque semaine (le même jour que la date choisie) ou chaque mois (le même quantième, ou le dernier jour du mois). Une tâche d'un soir est créée toute seule à chaque date : le jour même pour « chaque jour », une semaine à l'avance sinon. Elles se listent dans la carte « Récurrentes » de la page Tâches ; « Arrêter » efface les prochaines pas encore faites et garde les autres.
+- **Historique** (en bas de la page Tâches) : un bilan par semaine, du lundi au dimanche, fait tout seul. Pour chaque semaine : les tâches faites, celles pas faites à temps (avec la date si tu les as faites plus tard), le temps passé et la répartition par projet. La semaine en cours est en haut ; « Semaines d'avant » remonte plus loin.
+- **Capture rapide** : depuis une autre app (navigateur, Gmail, YouTube…), bouton Partager › **Microdash** : le lien, le titre ou le texte partagé devient une tâche, à ranger pour ce soir, cette semaine ou plus tard. Marche avec l'app installée sur Android (et Chrome sur ordinateur). Après la mise à jour, Microdash peut mettre jusqu'à un jour à apparaître dans le menu Partager ; sinon, désinstalle et réinstalle l'app.
+- **Capture sur iPhone** : iOS ne propose pas les apps web dans Partager. Crée un raccourci (app Raccourcis) : « Recevoir les URL et le texte depuis la feuille de partage », puis « Encoder l'URL » sur l'entrée, puis « Ouvrir les URL » avec `https://ton-site/partager?text=` suivi du texte encodé. Il apparaît ensuite dans Partager.
 
 ## Agenda
 
@@ -61,7 +65,7 @@ Tes mails Gmail non lus des 14 derniers jours, triés.
 Tu parles à Claude et il lit ou change ton Microdash pour toi.
 
 - **Ajouter** : copie l'adresse dans Compte › carte « Claude », puis dans Claude : Paramètres › Connecteurs › Ajouter un connecteur personnalisé.
-- **Outils** : `ce_soir`, `lister_taches`, `ajouter_tache`, `modifier_tache`, `terminer_tache`, `supprimer_tache`, `agenda`, `ajouter_rendez_vous`, `supprimer_rendez_vous`, `marquer_echeance`, `resume_finances`, `lire_veille`, `lire_mails_non_lus`, `marquer_mails_lus`, `lire_guide` (ce guide).
+- **Outils** : `ce_soir`, `lister_taches`, `ajouter_tache`, `modifier_tache`, `terminer_tache`, `supprimer_tache`, `bilan_taches` (bilan des semaines), `agenda`, `ajouter_rendez_vous`, `supprimer_rendez_vous`, `marquer_echeance`, `resume_finances`, `lire_veille`, `lire_mails_non_lus`, `marquer_mails_lus`, `lire_guide` (ce guide).
 - **Exemples** : la page Plus › Commandes Claude donne des phrases à dire.
 - **Couper** : Compte › carte « Claude » › « Couper l'accès de Claude ».
 
