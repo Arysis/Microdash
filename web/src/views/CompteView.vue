@@ -192,6 +192,7 @@ async function supprimer() {
         Pilote Microdash en écrivant à Claude : « ajoute ce soir la tâche Relancer Paul », « qu'est-ce que j'ai jeudi ? ».
         Dans Claude, ouvre Paramètres, Connecteurs, Ajouter un connecteur personnalisé, et colle cette adresse :
       </p>
+      <p class="aide"><RouterLink to="/claude">Voir toutes les commandes</RouterLink></p>
       <div class="adresse">
         <code>{{ claude.adresse }}</code>
         <button class="bouton secondaire" @click="copierAdresse"><Copy v-bind="icone" />{{ copie ? 'Copiée' : 'Copier' }}</button>
