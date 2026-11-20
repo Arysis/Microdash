@@ -184,9 +184,11 @@ async function supprimer() {
   }
 }
 
-// --- Flux iCal pour Home Assistant ---
+// --- Flux iCal : abonnement depuis Google Agenda, iPhone, Outlook, Home Assistant ---
 const flux = ref(null)
 const lienFlux = ref('')
+const lienWebcal = computed(() => lienFlux.value.replace(/^https?:/, 'webcal:'))
+const lienGoogle = computed(() => `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(lienWebcal.value)}`)
 const copie = ref(false)
 const erreurFlux = ref('')
 
@@ -202,7 +204,7 @@ async function creerLien() {
   if (flux.value?.actif) {
     const ok = await demanderConfirmation({
       titre: 'Changer le lien ?',
-      message: "L'ancien lien cessera de marcher : il faudra coller le nouveau dans Home Assistant.",
+      message: "L'ancien lien cessera de marcher : il faudra ajouter le nouveau dans tes calendriers.",
       action: 'Changer le lien',
     })
     if (!ok) return
@@ -228,7 +230,7 @@ async function copier() {
 }
 
 async function couperLien() {
-  const ok = await demanderConfirmation({ titre: 'Couper le lien ?', message: 'Home Assistant ne verra plus ton agenda.', action: 'Couper le lien' })
+  const ok = await demanderConfirmation({ titre: 'Couper le lien ?', message: 'Tes calendriers abonnés ne verront plus ton agenda.', action: 'Couper le lien' })
   if (!ok) return
   try {
     await api.del('/calendrier/flux')
@@ -345,11 +347,10 @@ async function couperLien() {
     </div>
 
     <section class="carte ha" aria-labelledby="titre-ha">
-      <h2 id="titre-ha">Dans Home Assistant</h2>
+      <h2 id="titre-ha">Abonnement calendrier</h2>
       <p class="aide">
-        Un lien secret donne ton agenda (rendez-vous, tâches datées, échéances) au format iCal.
-        Dans Home Assistant : Paramètres, Appareils et services, Ajouter une intégration, « Remote Calendar », puis colle le lien.
-        Il marche aussi avec le calendrier de ton téléphone.
+        Un lien secret donne ton agenda au format iCal : rendez-vous, tâches datées (chaque soir de leur période) et échéances.
+        Ton calendrier le relit tout seul : Google Agenda, iPhone, Outlook, Thunderbird ou Home Assistant.
       </p>
       <template v-if="lienFlux">
         <label>Ton lien (montré une seule fois)
@@ -357,7 +358,15 @@ async function couperLien() {
         </label>
         <div class="boutons-form">
           <button class="bouton principal" @click="copier">{{ copie ? 'Lien copié' : 'Copier le lien' }}</button>
+          <a class="bouton secondaire" :href="lienWebcal">Ouvrir dans mon calendrier</a>
+          <a class="bouton secondaire" :href="lienGoogle" target="_blank" rel="noopener">Google Agenda</a>
         </div>
+        <ul class="aide etapes">
+          <li><strong>Google Agenda</strong> : bouton ci-dessus, ou sur ordinateur « Autres agendas », +, « À partir de l'URL ». Google relit le lien quelques fois par jour seulement.</li>
+          <li><strong>iPhone</strong> : « Ouvrir dans mon calendrier », ou Réglages, Calendrier, Comptes, Ajouter un compte, Autre, « Ajouter un calendrier avec abonnement ».</li>
+          <li><strong>Outlook</strong> : Ajouter un calendrier, « S'abonner à partir du web ».</li>
+          <li><strong>Home Assistant</strong> : Paramètres, Appareils et services, Ajouter une intégration, « Remote Calendar ».</li>
+        </ul>
       </template>
       <template v-else-if="flux?.actif">
         <p>Le lien est actif. Il n'est montré qu'une fois : si tu l'as perdu, change-le.</p>
@@ -375,6 +384,7 @@ async function couperLien() {
 </template>
 
 <style scoped>
+.etapes { margin: 0; padding-left: var(--e5); display: grid; gap: var(--e1); }
 .bandeau .titre-ligne { margin-bottom: var(--e3); }
 .bandeau .ajouter { background: var(--blanc); color: var(--sarcelle); border-color: var(--blanc); min-height: 40px; }
 .navigation { display: flex; align-items: center; gap: var(--e2); margin-top: var(--e3); color: var(--blanc); font-weight: 600; }

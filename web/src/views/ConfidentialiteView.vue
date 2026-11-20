@@ -24,6 +24,7 @@ const ac = 'À COMPLÉTER'
       <li><strong>Ta connexion Stripe</strong>, si tu l'actives : ta clé restreinte, chiffrée (AES-256-GCM) et jamais réaffichée, l'identifiant et le nom de ton compte Stripe, et les chiffres de la dernière lecture (revenu mensuel récurrent, nombre d'abonnements, encaissements et frais par mois). Aucune donnée sur tes clients n'est gardée.</li>
       <li><strong>Ta connexion Qonto</strong>, si tu l'actives : ton identifiant et ta clé API, chiffrée (AES-256-GCM) et jamais réaffichée, le nom de ton organisation, le solde de tes comptes et, pour chaque opération lue, sa date, son montant, son libellé et sa référence. Rien n'est jamais écrit dans ton compte Qonto.</li>
       <li><strong>Tes tâches et tes rendez-vous</strong>, si tu les saisis, et l'empreinte de ton lien d'agenda iCal (le lien lui-même n'est pas gardé).</li>
+      <li><strong>Tes notifications</strong>, si tu les actives : pour chaque appareil, l'adresse d'abonnement donnée par ton navigateur, ses clés de chiffrement et un nom (navigateur et système, par exemple « Chrome sur Windows ») ; tes réglages (heure du résumé, rappel avant les rendez-vous) et la liste des notifications déjà envoyées, pour ne jamais t'envoyer deux fois la même.</li>
       <li><strong>Ta connexion Gmail</strong>, si tu l'actives : ton adresse et ton mot de passe d'application, chiffré (AES-256-GCM) et jamais réaffiché, et, pour les mails non lus de ta boîte de réception des 14 derniers jours, l'expéditeur, le sujet, la date et les 200 premiers caractères du texte ; pour les mails de ta veille, les 4 000 premiers caractères. Les messages complets et les pièces jointes ne sont jamais copiés. Les seules actions faites dans Gmail sont l'archivage d'un mail et le marquage comme lus de mails, quand tu le demandes, dans Microdash ou à Claude. Si tu as ajouté le connecteur Claude, Claude peut lire ces copies de tes mails non lus quand tu le lui demandes.</li>
     </ul>
     <p>Nous ne demandons ni ton nom, ni ton numéro de téléphone, ni tes coordonnées bancaires.</p>
@@ -38,6 +39,7 @@ const ac = 'À COMPLÉTER'
       <li>Ta connexion Stripe : jusqu'à ce que tu la déconnectes ou que tu supprimes ton compte.</li>
       <li>Ta clé Qonto : jusqu'à ce que tu la déconnectes. Les opérations lues sont gardées, pour ne jamais les réimporter, jusqu'à la suppression de ton compte.</li>
       <li>Ta connexion Gmail : jusqu'à ce que tu la déconnectes. La copie des mails est remplacée toutes les 5 minutes et ne garde que les 14 derniers jours.</li>
+      <li>Tes appareils abonnés aux notifications : jusqu'à ce que tu les retires ou que ton navigateur annule l'abonnement. La liste des notifications envoyées : 35 jours.</li>
       <li>Ta session de connexion : 30 jours au plus, ou jusqu'à ce que tu te déconnectes.</li>
       <li>Les journaux techniques du serveur (adresse IP, page demandée) : <span class="a-completer">[{{ ac }} : durée]</span>.</li>
     </ul>
@@ -46,6 +48,7 @@ const ac = 'À COMPLÉTER'
     <ul>
       <li>L'éditeur du site, pour faire fonctionner le service.</li>
       <li>L'hébergeur du serveur : <span class="a-completer">[{{ ac }} : nom et pays]</span>.</li>
+      <li>Le service de notifications de ton navigateur (Google pour Chrome, Edge et Android, Mozilla pour Firefox, Apple pour Safari et l'iPhone, Microsoft pour Windows), si tu actives les notifications. Il transmet chaque notification à ton appareil, chiffrée : il ne peut pas en lire le contenu.</li>
       <li>Resend, le service qui envoie les rappels par e-mail. Il reçoit ton adresse e-mail et le contenu du rappel : l'échéance, sa date et les montants estimés. Resend est une société américaine : <span class="a-completer">[{{ ac }} : garanties du transfert hors de l'Union européenne, voir l'accord de traitement des données de Resend]</span>.</li>
     </ul>
     <p>Les rappels sont activés à la création du compte. Tu les coupes un par un dans l'écran Compte, ou tous d'un coup avec le lien en bas de chaque e-mail.</p>

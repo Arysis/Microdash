@@ -111,9 +111,26 @@ Chaque source est un module (`api/internal/modules`). Un module donne son code, 
 
 Chacun peut désactiver un module dans Plus › Réglages : il quitte « Ce soir » et le menu, ses données restent.
 
-### Agenda dans Home Assistant
+### Abonnement calendrier (iCal)
 
-Dans l'app, Agenda › « Dans Home Assistant » › Créer le lien. Le lien (secret, montré une seule fois) sert un flux iCal : rendez-vous, tâches datées et échéances, de deux mois en arrière à un an en avant. Dans Home Assistant : Paramètres › Appareils et services › Ajouter une intégration › **Remote Calendar**, et coller le lien. Le même lien s'ajoute au calendrier du téléphone (abonnement par URL). « Changer le lien » coupe l'ancien.
+Dans l'app, Agenda › « Abonnement calendrier » › Créer le lien. Le lien (secret, montré une seule fois) sert un flux iCal : rendez-vous, tâches datées (chaque soir de leur période) et échéances, de deux mois en arrière à un an en avant. Les tâches « Plus tard » n'ont pas de date et n'y sont pas. Le flux demande aux calendriers de le relire chaque heure ; Google Agenda le relit à son rythme (quelques fois par jour).
+
+- **Google Agenda** : bouton « Google Agenda », ou sur ordinateur « Autres agendas », +, « À partir de l'URL ».
+- **iPhone, Mac** : bouton « Ouvrir dans mon calendrier » (lien `webcal://`), ou Réglages › Calendrier › Comptes › Ajouter un compte › Autre › « Ajouter un calendrier avec abonnement ».
+- **Outlook** : Ajouter un calendrier › « S'abonner à partir du web ».
+- **Home Assistant** : Paramètres › Appareils et services › Ajouter une intégration › **Remote Calendar**, et coller le lien.
+
+« Changer le lien » coupe l'ancien.
+
+### Notifications push
+
+Compte › Notifications › « Sur cet appareil », sur chaque appareil : PC (Chrome, Edge, Firefox, Safari) et téléphone. Sur Android, l'app installée ou le navigateur suffisent. Sur iPhone et iPad (iOS 16.4 ou plus), il faut d'abord installer l'app : Safari › Partager › « Sur l'écran d'accueil », puis activer les notifications depuis l'app installée.
+
+- **Ta soirée** : chaque jour à l'heure choisie (18 h par défaut), les tâches du jour, les échéances et les rendez-vous de la soirée. Rien n'est envoyé s'il n'y a rien.
+- **Avant un rendez-vous** : pour chaque rendez-vous à heure fixe de l'agenda, de 0 à 2 h avant (15 min par défaut).
+- « Envoyer un essai » vérifie que tout marche ; la liste des appareils permet d'en retirer un.
+
+Rien à configurer côté serveur, et aucun service payant : l'API envoie elle-même les notifications aux services de push des navigateurs (Web Push, chiffrées de bout en bout), avec une clé VAPID créée au premier démarrage et gardée en base (table `push_cle`). Si cette clé est effacée, chaque appareil doit réactiver les notifications. Un appareil que son navigateur a désabonné est oublié au premier envoi. Après un redémarrage de l'API, une notification en retard part encore (jusqu'à 3 h pour la soirée, 10 min après le début d'un rendez-vous).
 
 ### Mails (Gmail)
 
@@ -192,7 +209,7 @@ Un débit dont le libellé contient « URSSAF » est proposé au poste URSSAF, p
 
 | Dossier | Contenu |
 | --- | --- |
-| `api/` | API Go : comptes, profil, transactions, calculs et agenda (`internal/calc`), rappels par e-mail (`internal/alertes`), exports CSV et PDF (`internal/exports`, police IBM Plex Sans sous licence OFL) |
+| `api/` | API Go : comptes, profil, transactions, calculs et agenda (`internal/calc`), rappels par e-mail (`internal/alertes`), notifications push (`internal/notifs`, `internal/webpush`), exports CSV et PDF (`internal/exports`, police IBM Plex Sans sous licence OFL) |
 | `api/baremes/` | Taux, plafonds, règles et dates de l'agenda par année (`2026.yaml`) |
 | `web/` | PWA Vue 3 + Vite, servie par Nginx qui relaie `/api` vers l'API |
 | `DESIGN.md` | Couleurs, polices, formes, icônes, mouvement et ton des textes : à suivre pour tout changement d'interface |

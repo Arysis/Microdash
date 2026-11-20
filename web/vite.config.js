@@ -38,6 +38,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Notifications push : réception et clic (public/push-sw.js).
+        importScripts: ['push-sw.js'],
         navigateFallbackDenylist: [/^\/api\//, /^\/(mcp|oauth\/|\.well-known\/|autoriser-claude)/],
         runtimeCaching: [
           {

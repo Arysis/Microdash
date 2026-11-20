@@ -29,6 +29,7 @@ import (
 	"github.com/arysis/microdash/api/internal/exports"
 	"github.com/arysis/microdash/api/internal/modules"
 	"github.com/arysis/microdash/api/internal/modules/mails"
+	"github.com/arysis/microdash/api/internal/notifs"
 	"github.com/arysis/microdash/api/internal/store"
 )
 
@@ -51,6 +52,7 @@ type Server struct {
 	MdpOublie    []string          // adresses autorisées à réinitialiser sans e-mail ; « * » : toutes ; vide : coupé
 	CodeSecours  string            // empreinte du code de secours à usage unique ; vide : pas de code
 	SiteURL      string            // adresse publique (SITE_URL), sans « / » final ; vide : déduite de la requête
+	Notifs       *notifs.Service   // notifications push ; nil : indisponibles
 	echecsStripe sync.Map          // compte → heure du dernier échec de lecture Stripe
 	now          func() time.Time
 }
@@ -140,6 +142,12 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/calendrier/flux", s.getFlux)
 			r.Post("/calendrier/flux", s.changerFlux)
 			r.Delete("/calendrier/flux", s.supprimerFlux)
+			r.Get("/notifications", s.getNotifications)
+			r.Post("/notifications/abonnements", s.abonnerNotifications)
+			r.Post("/notifications/desabonner", s.desabonnerNotifications)
+			r.Delete("/notifications/abonnements/{id}", s.supprimerAppareil)
+			r.Put("/notifications/preferences", s.putPreferencesNotifications)
+			r.Post("/notifications/essai", s.essaiNotification)
 			r.Post("/evenements", s.createEvenement)
 			r.Put("/evenements/{id}", s.updateEvenement)
 			r.Delete("/evenements/{id}", s.deleteEvenement)
