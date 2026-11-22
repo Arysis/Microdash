@@ -6,6 +6,7 @@ import { LogOut, Trash2, ChevronRight, FileDown, Copy, Unplug, KeyRound } from '
 import { session, deconnecter, supprimerCompte } from '../session.js'
 import { demanderConfirmation } from '../confirmation.js'
 import { formatDate } from '../format.js'
+import CarteNotifications from '../components/CarteNotifications.vue'
 
 const router = useRouter()
 const erreur = ref('')
@@ -184,6 +185,8 @@ async function supprimer() {
     <p v-if="erreurRappels" class="erreur" role="alert">{{ erreurRappels }}</p>
     <p class="aide">Envoyés à {{ session.user?.email }}. Chaque e-mail contient un lien pour te désinscrire.</p>
   </section>
+
+  <CarteNotifications />
 
   <section class="carte pile" aria-labelledby="titre-claude">
     <h2 id="titre-claude">Claude</h2>

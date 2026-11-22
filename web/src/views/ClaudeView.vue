@@ -17,6 +17,8 @@ const groupes = [
         exemples: ["C'est fait pour Relancer Paul."] },
       { outil: 'supprimer_tache', titre: 'Supprimer une tâche', aide: 'Claude te demande confirmation avant.',
         exemples: ['Supprime la tâche « Tester la démo ».'] },
+      { outil: 'bilan_taches', titre: 'Bilan des semaines', aide: 'Les tâches faites et pas faites à temps, semaine par semaine, avec le temps passé par projet.',
+        exemples: ['Fais-moi le bilan de ma semaine.', "Qu'est-ce que j'ai laissé de côté ce mois-ci ?"] },
     ],
   },
   {
@@ -42,6 +44,13 @@ const groupes = [
         exemples: ['Annule le rendez-vous de mardi.'] },
       { outil: 'marquer_echeance', titre: 'Marquer une échéance', aide: 'Déclarée ou payée, ou de nouveau à faire.',
         exemples: ["J'ai déclaré l'URSSAF d'octobre."] },
+    ],
+  },
+  {
+    titre: 'Aide',
+    commandes: [
+      { outil: 'lire_guide', titre: 'Lire le guide', aide: 'Tout ce que fait Microdash, le même texte que la page Aide. Claude le lit avant de te proposer une nouveauté.',
+        exemples: ['Est-ce que Microdash sait envoyer des notifications ?', "Rappelle-moi tout ce que fait Microdash."] },
     ],
   },
   {

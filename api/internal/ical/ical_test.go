@@ -17,6 +17,7 @@ func TestEcrire(t *testing.T) {
 
 	for _, attendu := range []string{
 		"BEGIN:VCALENDAR\r\n",
+		"REFRESH-INTERVAL;VALUE=DURATION:PT1H\r\n",
 		"DTSTART;VALUE=DATE:20261102\r\nDTEND;VALUE=DATE:20261103\r\n",
 		`SUMMARY:Déclaration URSSAF\, 3e trimestre\; à faire`,
 		"DTSTART:20261102T173000Z\r\nDTEND:20261102T181500Z\r\n", // heure d'hiver : UTC+1

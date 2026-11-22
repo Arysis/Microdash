@@ -84,3 +84,16 @@ export function lireDuree(texte) {
   if (!minutes || minutes > 1440) return { titre: t, minutes: 0 }
   return { titre: t.slice(0, m.index).trim(), minutes }
 }
+
+// Tâches récurrentes : chaque jour, chaque semaine (le jour de la première date) ou chaque mois.
+export const rythmes = [{ code: 'jour' }, { code: 'semaine' }, { code: 'mois' }]
+const joursNoms = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi']
+// « Chaque lundi », « Chaque mois, le 3 », « Chaque jour »
+export function nomRythme(rythme, depuis) {
+  if (rythme === 'jour') return 'Chaque jour'
+  if (!depuis) return rythme === 'semaine' ? 'Chaque semaine' : 'Chaque mois'
+  const d = lire(depuis)
+  if (rythme === 'semaine') return `Chaque ${joursNoms[d.getUTCDay()]}`
+  const j = d.getUTCDate()
+  return j > 28 ? `Chaque mois, le ${j} (ou le dernier jour)` : `Chaque mois, le ${j === 1 ? '1er' : j}`
+}

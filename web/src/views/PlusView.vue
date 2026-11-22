@@ -5,6 +5,7 @@ import { moduleActif } from '../session.js'
 
 const icone = { size: 20, 'stroke-width': 1.75, 'aria-hidden': 'true' }
 const liens = computed(() => [
+  { to: '/aide', titre: 'Aide', aide: 'Tout ce que fait Microdash, page par page' },
   ...(moduleActif('mails') ? [{ to: '/mails', titre: 'Mails', aide: 'Importants et les autres, de ta boîte Gmail' }] : []),
   { to: '/reglages', titre: 'Réglages', aide: 'Modules activés, Gmail, ce qui est important' },
   { to: '/claude', titre: 'Commandes Claude', aide: 'Ce que tu peux demander à Claude, avec des exemples' },
