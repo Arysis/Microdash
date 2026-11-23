@@ -4,6 +4,8 @@ import { api } from '../api.js'
 import { dateCourte, dateLongue } from '../echeances.js'
 import { moduleActif } from '../session.js'
 import { duree, enCours as prevueLe, nomProjet } from '../taches.js'
+import { useRature, sortie } from '../rature.js'
+import BandeauAnnuler from '../components/BandeauAnnuler.vue'
 
 const donnees = ref(null)
 const erreur = ref('')
@@ -118,7 +120,7 @@ const enTache = (e, quand) => decider(e, '/ce-soir/tache', { quand }, (t) => {
   if (prevueLe(t, donnees.value.aujourdhui) && soiree.value) soiree.value = [...soiree.value, t]
 })
 
-async function cocher(t) {
+async function basculer(t) {
   erreur.value = ''
   const maj = (x) => (soiree.value = soiree.value.map((y) => (y.id === x.id ? x : y)))
   maj({ ...t, faite: !t.faite })
@@ -127,11 +129,16 @@ async function cocher(t) {
       titre: t.titre, notes: t.notes, projet: t.projet, duree_minutes: t.duree_minutes || 0,
       quand: t.quand, debut: t.debut || '', fin: t.fin || '', echeance: t.echeance || '', faite: !t.faite,
     }))
+    return true
   } catch (err) {
     maj(t)
     erreur.value = err.message
+    return false
   }
 }
+// Une tâche cochée est raturée puis quitte « Ta soirée ».
+const { raturees, affichee, cocher, annulable, annuler } = useRature(basculer)
+const soireeAffichee = computed(() => (soiree.value || []).filter(affichee))
 const metaTache = (t) => [nomProjet(t.projet), duree(t.duree_minutes)].filter(Boolean).join(' · ')
 </script>
 
@@ -165,17 +172,18 @@ const metaTache = (t) => [nomProjet(t.projet), duree(t.duree_minutes)].filter(Bo
       <p v-if="soiree && !soiree.length" class="vide">
         Aucune tâche pour ce soir. <RouterLink to="/taches">Choisir dans tes tâches</RouterLink>
       </p>
-      <ul v-if="soiree">
-        <li v-for="t in soiree" :key="t.id" :class="['tache', { faite: t.faite }]">
+      <p v-else-if="soiree && !soireeAffichee.length" class="vide">Tout est fait pour ce soir.</p>
+      <TransitionGroup v-if="soiree" tag="ul" :css="false" @leave="sortie">
+        <li v-for="t in soireeAffichee" :key="t.id" :class="['tache', { raturee: raturees.has(t.id) }]">
           <label class="case-tache">
             <input type="checkbox" :checked="t.faite" @change="cocher(t)" />
             <span>
-              <span class="titre">{{ t.titre }}</span>
+              <span class="titre"><span class="trait">{{ t.titre }}</span></span>
               <small v-if="metaTache(t)" class="aide">{{ metaTache(t) }}</small>
             </span>
           </label>
         </li>
-      </ul>
+      </TransitionGroup>
     </section>
 
     <section class="carte liste-soir" aria-labelledby="titre-traiter">
@@ -217,6 +225,7 @@ const metaTache = (t) => [nomProjet(t.projet), duree(t.duree_minutes)].filter(Bo
       </ul>
     </section>
   </div>
+  <BandeauAnnuler :tache="annulable" @annuler="annuler" />
 </template>
 
 <style scoped>
@@ -246,7 +255,6 @@ const metaTache = (t) => [nomProjet(t.projet), duree(t.duree_minutes)].filter(Bo
 .case-tache { display: flex; align-items: center; gap: var(--e3); min-height: 52px; font-weight: 400; cursor: pointer; }
 .case-tache input { width: 22px; height: 22px; min-height: 0; padding: 0; margin: 0 0 0 var(--e1); flex-shrink: 0; accent-color: var(--sarcelle); }
 .case-tache > span { display: grid; gap: 2px; }
-.faite .titre { text-decoration: line-through; color: var(--pierre); }
 .rendez-vous li { padding: 0; }
 .rdv { display: flex; align-items: center; gap: var(--e3); min-height: 48px; color: var(--encre); text-decoration: none; }
 .rdv .heure { min-width: 56px; font-size: 13px; font-weight: 600; color: var(--sarcelle); font-variant-numeric: tabular-nums; }

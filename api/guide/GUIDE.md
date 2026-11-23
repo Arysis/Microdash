@@ -17,6 +17,7 @@ Tes tâches par projet : Educari, SaaS, Microdash, perso.
 
 - **Par dates** (du … au …) : la tâche est à faire chaque soir de sa période. Elle s'affiche ces jours-là dans l'agenda et dans « Ta soirée ».
 - **Par semaine** (du lundi au dimanche) ou **Plus tard** (sans date).
+- **Cocher une tâche** (page Tâches ou « Ta soirée ») : un trait barre la tâche, puis elle quitte la liste. Tu la retrouves dans l'**Historique**. Reclique pendant le trait pour l'arrêter, ou touche **Annuler** dans le bandeau qui reste 5 secondes.
 - **Durée** : écris-la à la fin du titre (« Relancer Paul 15 min », « Compta 1 h 30 ») ; elle compte dans « Ta soirée ».
 - **Tâches récurrentes** : dans le formulaire d'ajout, liste « Dates », choisis « Répéter » : chaque jour, chaque semaine (le même jour que la date choisie) ou chaque mois (le même quantième, ou le dernier jour du mois). Une tâche d'un soir est créée toute seule à chaque date : le jour même pour « chaque jour », une semaine à l'avance sinon. Elles se listent dans la carte « Récurrentes » de la page Tâches ; « Arrêter » efface les prochaines pas encore faites et garde les autres.
 - **Historique** (en bas de la page Tâches) : un bilan par semaine, du lundi au dimanche, fait tout seul. Pour chaque semaine : les tâches faites, celles pas faites à temps (avec la date si tu les as faites plus tard), le temps passé et la répartition par projet. La semaine en cours est en haut ; « Semaines d'avant » remonte plus loin.
