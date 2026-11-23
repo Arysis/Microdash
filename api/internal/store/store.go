@@ -410,7 +410,7 @@ func (p Profil) VersCalc() calc.Profil {
 func VersCalc(txs []Transaction) []calc.Transaction {
 	res := make([]calc.Transaction, 0, len(txs))
 	for _, t := range txs {
-		res = append(res, calc.Transaction{Type: t.Type, Date: t.Date, Centimes: t.Centimes, Categorie: t.Categorie, Echeance: t.Echeance})
+		res = append(res, calc.Transaction{Type: t.Type, Date: t.Date, Centimes: t.Centimes, Categorie: t.Categorie, Echeance: t.Echeance, Recurrente: t.Recurrente})
 	}
 	return res
 }

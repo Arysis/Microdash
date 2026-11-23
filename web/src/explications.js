@@ -195,7 +195,7 @@ export const explications = {
   prevision: {
     titre: 'Prévision',
     texte: [
-      "Les mois à venir, en hachuré. Ils comptent tes dépenses récurrentes, tes cotisations à leur date limite et des recettes estimées.",
+      "Les mois à venir, en hachuré. Ils comptent des recettes estimées, tes dépenses récurrentes, la moyenne de tes autres dépenses et tes cotisations à leur date limite.",
       "C'est une estimation : elle bouge à chaque nouvelle saisie.",
     ],
   },
@@ -203,7 +203,7 @@ export const explications = {
     titre: 'Source des recettes prévues',
     texte: [
       'MRR Stripe : le revenu mensuel de tes abonnements Stripe en cours.',
-      'Mes saisies : la moyenne de tes recettes des 3 derniers mois complets.',
+      'Mes saisies : la moyenne de tes recettes des 3 derniers mois complets, sans les mois d\'avant ta première vente.',
     ],
   },
   cleStripe: {

@@ -48,6 +48,7 @@ Ton activité de micro-entrepreneur. Les montants sont des estimations : seule l
 - **Saisies** : recettes et dépenses. Hors ligne, elles attendent le retour du réseau. Un paiement à l'URSSAF se saisit au poste « URSSAF (cotisations et impôt) ».
 - **Échéances** : déclarations URSSAF, impôt, CFE, à cocher une fois faites.
 - **Trésorerie** : l'argent qui entre et qui sort, mois par mois, avec 6 mois de prévision et les dépenses récurrentes (saisies toutes seules à leur date).
+- **Prévision de trésorerie** : recettes au MRR Stripe ou à la moyenne de tes 3 derniers mois complets (sans les mois d'avant ta première vente). Dépenses : tes dépenses récurrentes, plus la moyenne de tes autres dépenses des 3 derniers mois complets (hors paiements URSSAF). Touche un mois hachuré pour voir d'où vient chaque chiffre.
 - **Stripe** : ton revenu mensuel récurrent et tes encaissements (clé restreinte `rk_`, lecture seule).
 - **Qonto** : tes opérations bancaires, rangées toutes seules ou proposées « À valider » dans Saisies (lecture seule).
 
