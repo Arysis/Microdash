@@ -317,7 +317,7 @@ function clavier(e, i) {
 </template>
 
 <style scoped>
-.graphe { margin: 0; display: grid; gap: var(--e3); }
+.graphe { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--e3); }
 .legende { display: flex; flex-wrap: wrap; gap: var(--e1) var(--e4); font-size: 13px; color: var(--pierre); }
 .legende span { display: inline-flex; align-items: center; gap: var(--e2); }
 .hachure { background: repeating-linear-gradient(45deg, var(--sarcelle) 0 2px, var(--sarcelle-clair) 2px 5px); }
