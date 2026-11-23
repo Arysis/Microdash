@@ -126,6 +126,8 @@ input { min-width: 0; }
 /* --- Cartes et listes --- */
 .carte { background: var(--blanc); border: 1px solid var(--lin); border-radius: var(--rayon); padding: var(--e5) var(--e4); }
 .pile { display: grid; gap: var(--e4); }
+/* Un enfant large (tableau qui défile) ne doit pas élargir la page. */
+.pile > * { min-width: 0; }
 .titre-ligne { display: flex; justify-content: space-between; align-items: center; gap: var(--e3); }
 .titre-ligne select { width: auto; }
 
