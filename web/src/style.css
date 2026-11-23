@@ -202,3 +202,14 @@ dialog.confirmation::backdrop { background: var(--voile); }
 .texte-legal dl { margin: 0; display: grid; gap: var(--e2); }
 .texte-legal dt { color: var(--pierre); font-size: 15px; }
 .texte-legal dd { margin: 0 0 var(--e2); }
+
+/* --- Rature d'une tâche cochée : le trait part de la gauche, puis la ligne se replie (rature.js) --- */
+.trait {
+  background: linear-gradient(var(--sarcelle), var(--sarcelle)) no-repeat 0 55% / 0 2px;
+  transition: color var(--duree) ease-out;
+}
+.raturee .trait { color: var(--pierre); animation: rature 300ms ease-out forwards; }
+@keyframes rature { to { background-size: 100% 2px; } }
+@media (prefers-reduced-motion: reduce) {
+  .raturee .trait { background-size: 100% 2px; }
+}

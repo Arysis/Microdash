@@ -69,6 +69,7 @@ Seules animations autorisées :
 
 - les transitions de couleur, de fond, de bordure et d'opacité au survol, au focus et au clic : 150 ms, `ease-out` ;
 - l'apparition en fondu de la fenêtre de confirmation : 150 ms.
+- la rature d'une tâche cochée : un trait sarcelle de 2 px barre le titre de gauche à droite en 300 ms (`ease-out`), puis la ligne se replie en fondu en 250 ms et quitte la liste. Un bandeau « Annuler » reste 5 secondes. Avec « réduire les animations », la tâche part tout de suite, le bandeau reste.
 
 Pas d'animation au défilement, pas de parallaxe, pas de rebond, pas de curseur personnalisé. Avec le réglage système « réduire les animations », toutes les transitions sont coupées.
 

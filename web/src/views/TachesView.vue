@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { api } from '../api.js'
 import { demanderConfirmation } from '../confirmation.js'
 import { dateCourte } from '../echeances.js'
+import { useRature, sortie } from '../rature.js'
+import BandeauAnnuler from '../components/BandeauAnnuler.vue'
 import { projets, nomProjet, listes, duree, lireDuree, aujourdhuiLocal, lundi, semaines, enCours as prevueLe, periode, intervalle, nomRythme, rythmes } from '../taches.js'
 
 const taches = ref(null)
@@ -76,7 +78,8 @@ const repartition = (s) => Object.entries(s.par_projet).map(([p, n]) => `${nomPr
 
 const annee = new Date().getFullYear()
 const visibles = computed(() => (taches.value || []).filter((t) => !filtre.value || t.projet === filtre.value))
-const parListe = (quand) => visibles.value.filter((t) => t.quand === quand)
+// Une tâche faite quitte sa liste après sa rature ; elle reste dans l'historique.
+const parListe = (quand) => visibles.value.filter((t) => t.quand === quand && affichee(t))
 const aFaire = computed(() => visibles.value.filter((t) => !t.faite).length)
 const minutes = (ts) => ts.filter((t) => !t.faite).reduce((n, t) => n + (t.duree_minutes || 0), 0)
 
@@ -141,18 +144,21 @@ function remplacer(t) {
 }
 
 // Coche tout de suite ; décoche si l'API refuse.
-async function cocher(t) {
+async function basculer(t) {
   erreur.value = ''
   const avant = t
   remplacer({ ...t, faite: !t.faite })
   try {
     remplacer(await api.put(`/taches/${t.id}`, { ...corps(versBrouillon(t)), faite: !t.faite }))
     chargerBilan()
+    return true
   } catch (e) {
     remplacer(avant)
     erreur.value = e.message
+    return false
   }
 }
+const { raturees, affichee, cocher, annulable, annuler } = useRature(basculer)
 
 function modifier(t) {
   edition.value = t.id
@@ -239,8 +245,8 @@ async function supprimer(t) {
       </div>
       <template v-if="l.quand !== 'plus_tard' || plusTardOuvert">
         <p v-if="taches && !parListe(l.quand).length" class="vide">Rien ici.</p>
-        <ul>
-          <li v-for="t in parListe(l.quand)" :key="t.id" :class="{ faite: t.faite }">
+        <TransitionGroup tag="ul" :css="false" @leave="sortie">
+          <li v-for="t in parListe(l.quand)" :key="t.id" :class="{ raturee: raturees.has(t.id) }">
             <form v-if="edition === t.id" class="edition" @submit.prevent="enregistrer">
               <label>Tâche <input v-model="brouillon.titre" maxlength="200" required /></label>
               <div class="ligne">
@@ -279,14 +285,14 @@ async function supprimer(t) {
             <template v-else>
               <input type="checkbox" class="coche" :checked="t.faite" :aria-label="`${t.faite ? 'Décocher' : 'Cocher'} « ${t.titre} »`" @change="cocher(t)" />
               <button class="corps" :aria-label="`Modifier « ${t.titre} »`" @click="modifier(t)">
-                <span class="titre">{{ t.titre }}</span>
+                <span class="titre"><span class="trait">{{ t.titre }}</span></span>
                 <small v-if="meta(t)">{{ meta(t) }}</small>
               </button>
               <a v-if="t.lien && /^https?:/.test(t.lien)" class="lien-bouton ouvrir" :href="t.lien" target="_blank" rel="noopener">Ouvrir</a>
               <RouterLink v-else-if="t.lien" class="lien-bouton ouvrir" :to="t.lien">Ouvrir</RouterLink>
             </template>
           </li>
-        </ul>
+        </TransitionGroup>
       </template>
     </section>
 
@@ -325,6 +331,7 @@ async function supprimer(t) {
       </details>
       <button v-if="bilan && nbSemaines < 104" class="lien-bouton" @click="plusDeSemaines">Semaines d'avant</button>
     </section>
+    <BandeauAnnuler :tache="annulable" @annuler="annuler" />
   </div>
 </template>
 
@@ -354,7 +361,6 @@ async function supprimer(t) {
 }
 .corps small { color: var(--pierre); font-size: 13px; }
 .titre { font-weight: 500; overflow-wrap: anywhere; }
-.faite .titre { text-decoration: line-through; color: var(--pierre); }
 .ouvrir { flex-shrink: 0; }
 .statique { cursor: default; }
 .historique { display: grid; gap: var(--e2); }
