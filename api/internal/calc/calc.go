@@ -33,6 +33,8 @@ type Transaction struct {
 	// Echeance : pour une dépense, code de la déclaration URSSAF qu'elle paie (ex. urssaf-2026-09).
 	// Ce paiement remplace l'estimation de la période et ne compte pas comme une dépense.
 	Echeance string
+	// Recurrente : dépense créée par une dépense récurrente. La prévision la compte déjà à sa date.
+	Recurrente bool
 }
 
 // PosteURSSAF est le poste de dépense des paiements à l'URSSAF (cotisations, CFP, impôt).

@@ -16,10 +16,13 @@ type MoisTresorerie struct {
 	Encaisse    int64  `json:"encaisse"`
 	Depenses    int64  `json:"depenses"`
 	Cotisations int64  `json:"cotisations"`
-	Flux        int64  `json:"flux"` // encaissé − dépenses − cotisations
-	EnCours     bool   `json:"en_cours,omitempty"`
-	Prevision   bool   `json:"prevision,omitempty"`
-	SoldeFin    *int64 `json:"solde_fin,omitempty"`
+	// Mois prévus : part des dépenses qui vient de la moyenne des dépenses ponctuelles, le reste
+	// étant les dépenses récurrentes.
+	DepensesMoyenne int64  `json:"depenses_moyenne,omitempty"`
+	Flux            int64  `json:"flux"` // encaissé − dépenses − cotisations
+	EnCours         bool   `json:"en_cours,omitempty"`
+	Prevision       bool   `json:"prevision,omitempty"`
+	SoldeFin        *int64 `json:"solde_fin,omitempty"`
 }
 
 // MethodePrevision dit d'où viennent les recettes prévues.
@@ -61,6 +64,8 @@ type Tresorerie struct {
 	RecettesPrevues int64            `json:"recettes_prevues"` // par mois
 	MoisMoyenne     int              `json:"mois_moyenne"`     // mois complets dans la moyenne (0 à 3)
 	Moyenne         int64            `json:"moyenne"`          // moyenne des recettes de ces mois
+	MoisDepenses    int              `json:"mois_depenses"`    // mois complets dans la moyenne des dépenses (0 à 3)
+	DepensesPrevues int64            `json:"depenses_prevues"` // dépenses ponctuelles prévues par mois, hors récurrentes et URSSAF
 	TauxCharges     float64          `json:"taux_charges"`     // cotisations, CFP et VL par euro encaissé, mois suivant
 	FluxPrevu       int64            `json:"flux_prevu"`       // somme des mois prévus
 	SoldePrevu      *int64           `json:"solde_prevu,omitempty"`
@@ -82,7 +87,7 @@ func TauxCharges(p Profil, set *bareme.Set, jour time.Time) (float64, error) {
 
 // CalculerTresorerie résume les mois passés à partir des saisies et prévoit les mois suivants :
 // recettes au MRR Stripe s'il est connu, sinon à la moyenne des 3 derniers mois complets ;
-// dépenses récurrentes à leurs dates ; cotisations à chaque date limite URSSAF, estimées sur les
+// dépenses récurrentes à leurs dates, plus la moyenne des autres dépenses des 3 derniers mois complets ; cotisations à chaque date limite URSSAF, estimées sur les
 // recettes déjà saisies de la période et sur les recettes prévues.
 func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error) {
 	auj := e.Aujourdhui
@@ -135,12 +140,19 @@ func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error
 
 	// Réel : saisies jusqu'à aujourd'hui, et opérations du compte pas encore validées.
 	recettesParMois := map[string]int64{}
+	ponctuellesParMois := map[string]int64{} // dépenses hors récurrentes et paiements URSSAF
+	var premiereVente time.Time
 	for _, t := range e.Saisies {
 		if t.Date.After(auj) {
 			continue
 		}
 		if t.Type == Recette {
 			recettesParMois[cleMois(t.Date)] += t.Centimes
+			if premiereVente.IsZero() || t.Date.Before(premiereVente) {
+				premiereVente = t.Date
+			}
+		} else if t.Echeance == "" && !t.Recurrente {
+			ponctuellesParMois[cleMois(t.Date)] += t.Centimes
 		}
 		reel(t.Date, t.Centimes, t.Type == Recette, t.Echeance != "")
 	}
@@ -156,18 +168,26 @@ func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error
 	res := &Tresorerie{}
 	// Moyenne des saisies, toujours calculée pour pouvoir la comparer au MRR. Seuls comptent les
 	// mois entiers d'activité : un mois commencé en cours de route ou d'avant le début la ferait baisser.
+	// Les mois d'avant la première vente ne comptent pas non plus pour les recettes.
 	debut := e.Profil.DebutActivite
-	var somme int64
+	var somme, sommeDep int64
 	for i := 1; i <= 3; i++ {
 		m := courant.AddDate(0, -i, 0)
 		if !debut.IsZero() && m.Before(time.Date(debut.Year(), debut.Month(), debut.Day(), 0, 0, 0, 0, time.UTC)) {
 			break
 		}
-		somme += recettesParMois[cleMois(m)]
-		res.MoisMoyenne++
+		sommeDep += ponctuellesParMois[cleMois(m)]
+		res.MoisDepenses++
+		if !premiereVente.IsZero() && !m.Before(time.Date(premiereVente.Year(), premiereVente.Month(), 1, 0, 0, 0, 0, time.UTC)) {
+			somme += recettesParMois[cleMois(m)]
+			res.MoisMoyenne++
+		}
 	}
 	if res.MoisMoyenne > 0 {
 		res.Moyenne = int64(math.Round(float64(somme) / float64(res.MoisMoyenne)))
+	}
+	if res.MoisDepenses > 0 {
+		res.DepensesPrevues = int64(math.Round(float64(sommeDep) / float64(res.MoisDepenses)))
 	}
 	res.Methode, res.RecettesPrevues = PrevisionMoyenne, res.Moyenne
 	if e.MRR != nil {
@@ -178,6 +198,8 @@ func CalculerTresorerie(e EntreeTresorerie, set *bareme.Set) (*Tresorerie, error
 		if mt.Prevision {
 			mt.Encaisse = res.RecettesPrevues
 			prevues[mt.Mois] = res.RecettesPrevues
+			mt.Depenses += res.DepensesPrevues
+			mt.DepensesMoyenne = res.DepensesPrevues
 		}
 	}
 

@@ -50,14 +50,18 @@ func TestTresorerie(t *testing.T) {
 	if !oct.EnCours || oct.Encaisse != 100000 || oct.Depenses != 2000 || oct.Cotisations != 0 || oct.SoldeFin == nil || *oct.SoldeFin != 498000 {
 		t.Errorf("octobre = %+v, solde %d", oct, *oct.SoldeFin)
 	}
+	// Dépenses prévues : la récurrente + la moyenne des dépenses ponctuelles (100 € en septembre / 3 mois).
+	if tr.MoisDepenses != 3 || tr.DepensesPrevues != 3333 {
+		t.Errorf("dépenses prévues = %d sur %d mois", tr.DepensesPrevues, tr.MoisDepenses)
+	}
 	// 2 novembre : T3 = 12 000 € × 21,5 % = 2 580 €.
-	if !nov.Prevision || nov.Encaisse != 400000 || nov.Depenses != 2000 || nov.Cotisations != 258000 {
+	if !nov.Prevision || nov.Encaisse != 400000 || nov.Depenses != 2000+3333 || nov.DepensesMoyenne != 3333 || nov.Cotisations != 258000 {
 		t.Errorf("novembre = %+v", nov)
 	}
-	if nov.Flux != 400000-2000-258000 || *nov.SoldeFin != 498000+nov.Flux {
+	if nov.Flux != 400000-5333-258000 || *nov.SoldeFin != 498000+nov.Flux {
 		t.Errorf("flux novembre = %d, solde %d", nov.Flux, *nov.SoldeFin)
 	}
-	if dec.Cotisations != 0 || dec.Depenses != 2000 {
+	if dec.Cotisations != 0 || dec.Depenses != 5333 {
 		t.Errorf("décembre = %+v", dec)
 	}
 	// 1er février 2027 hors horizon : janvier sans cotisations.
@@ -121,6 +125,41 @@ func TestTresorerieMoyenneActiviteRecente(t *testing.T) {
 	e.Profil.DebutActivite = jour("2026-10-01")
 	if tr, _ = CalculerTresorerie(e, set); tr.MoisMoyenne != 0 || tr.RecettesPrevues != 0 {
 		t.Errorf("sans mois complet : %d mois, %d", tr.MoisMoyenne, tr.RecettesPrevues)
+	}
+}
+
+func TestTresorerieMoyennes(t *testing.T) {
+	set := charger(t)
+	saisies := []Transaction{
+		// Activité ouverte en janvier, première vente en août : juillet ne compte pas pour les recettes.
+		{Type: Recette, Date: jour("2026-08-20"), Centimes: 60000},
+		{Type: Recette, Date: jour("2026-09-10"), Centimes: 30000},
+		{Type: Depense, Date: jour("2026-07-05"), Centimes: 1500},
+		{Type: Depense, Date: jour("2026-08-05"), Centimes: 1200},
+		{Type: Depense, Date: jour("2026-09-05"), Centimes: 900},
+		{Type: Depense, Date: jour("2026-09-15"), Centimes: 1000, Recurrente: true},     // déjà prévue à sa date
+		{Type: Depense, Date: jour("2026-09-20"), Centimes: 5000, Echeance: "urssaf-x"}, // paiement URSSAF
+	}
+	e := EntreeTresorerie{Aujourdhui: jour("2026-10-06"), Saisies: saisies, MoisPasses: 0, MoisFuturs: 1,
+		Recurrentes: []Recurrente{{Centimes: 1000, Frequence: Mensuelle, Debut: jour("2026-01-15")}},
+		Profil:      Profil{Categorie: "services_bic", NatureCFP: "artisan", DebutActivite: jour("2026-01-01")}}
+	tr, err := CalculerTresorerie(e, set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr.MoisMoyenne != 2 || tr.RecettesPrevues != 45000 {
+		t.Errorf("recettes : %d sur %d mois", tr.RecettesPrevues, tr.MoisMoyenne)
+	}
+	if tr.MoisDepenses != 3 || tr.DepensesPrevues != 1200 {
+		t.Errorf("dépenses : %d sur %d mois", tr.DepensesPrevues, tr.MoisDepenses)
+	}
+	if nov := tr.Mois[1]; nov.Depenses != 1000+1200 || nov.DepensesMoyenne != 1200 {
+		t.Errorf("novembre = %+v", nov)
+	}
+	// Aucune vente : pas de recettes prévues, mais les dépenses restent prévues.
+	tr, _ = CalculerTresorerie(EntreeTresorerie{Aujourdhui: e.Aujourdhui, Saisies: saisies[2:], Profil: e.Profil, MoisFuturs: 1}, set)
+	if tr.MoisMoyenne != 0 || tr.RecettesPrevues != 0 || tr.DepensesPrevues != 1200 {
+		t.Errorf("sans vente : %+v", tr)
 	}
 }
 

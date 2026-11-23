@@ -54,10 +54,28 @@ const methode = computed(() => {
   const r = formatEuros(tr.value.recettes_prevues)
   if (tr.value.methode === 'mrr') return `recettes au revenu mensuel récurrent Stripe, ${r} par mois`
   const n = tr.value.mois_moyenne
-  if (n === 0) return "pas encore de recettes prévues, faute d'un mois complet d'activité"
+  if (n === 0) return "pas encore de recettes prévues, faute d'un mois complet avec des ventes"
   return n === 1
     ? `recettes égales à ton dernier mois complet, ${r} par mois`
     : `recettes à la moyenne de tes ${n} derniers mois complets, ${r} par mois`
+})
+// Pour le détail d'un mois prévu.
+const sourceRecettes = computed(() => {
+  if (!tr.value) return ''
+  if (tr.value.methode === 'mrr') return 'MRR Stripe'
+  const n = tr.value.mois_moyenne
+  if (n === 0) return 'aucune vente encore'
+  const cles = mois.value.filter((m) => !m.prevision && !m.en_cours).slice(-n).map((m) => m.mois)
+  if (cles.length !== n) return `moyenne de tes ${n} derniers mois complets`
+  const court = (cle) => new Date(`${cle}-01T00:00:00`).toLocaleDateString('fr-FR', { month: 'short' })
+  return n === 1 ? `ventes de ${libelleMois(cles[0])}` : `moyenne ${court(cles[0])}–${court(cles[n - 1])}`
+})
+const depensesPrevues = computed(() => {
+  if (!tr.value) return ''
+  const n = tr.value.mois_depenses
+  if (!n) return 'dépenses récurrentes à leurs dates'
+  const d = formatEuros(tr.value.depenses_prevues)
+  return `dépenses récurrentes à leurs dates, plus ${d} par mois (moyenne de tes autres dépenses sur ${n > 1 ? `les ${n} derniers mois complets` : 'le dernier mois complet'})`
 })
 const tauxCharges = computed(() => (tr.value ? Math.round(tr.value.taux_charges * 1000) / 10 : 0))
 
@@ -345,7 +363,7 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
       </div>
       <InfoBulle k="vueGraphe" />
       </div>
-      <GrapheTresorerie :mois="mois" :vue="vueGraphe" />
+      <GrapheTresorerie :mois="mois" :vue="vueGraphe" :recettes-prevues="sourceRecettes" />
 
       <div v-if="stripe?.connecte && stripe.mrr" class="source">
         <span id="titre-source">Recettes prévues <InfoBulle k="sourcePrevision" /></span>
@@ -361,7 +379,7 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', auRetour)
       </div>
 
       <p class="aide">
-        Prévision : {{ methode }} ; dépenses récurrentes à leurs dates ; paiements URSSAF au mois de leur date limite
+        Prévision : {{ methode }} ; {{ depensesPrevues }} ; paiements URSSAF au mois de leur date limite
         ({{ tauxCharges.toLocaleString('fr-FR') }} % des recettes prévues). Le mois en cours compte tes saisies{{ qonto?.connecte ? ' et les opérations Qonto à valider' : '' }}, plus les dépenses récurrentes et paiements URSSAF d'ici sa fin.
       </p>
     </template>

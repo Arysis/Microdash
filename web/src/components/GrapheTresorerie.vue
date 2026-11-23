@@ -10,6 +10,7 @@ import { formatEuros } from '../format.js'
 const props = defineProps({
   mois: { type: Array, required: true },
   vue: { type: String, default: 'mois' }, // mois ou cumul
+  recettesPrevues: { type: String, default: '' }, // d'où viennent les recettes des mois prévus
 })
 const cumul = computed(() => props.vue === 'cumul')
 
@@ -134,6 +135,20 @@ const indexCourant = computed(() => Math.max(0, props.mois.findIndex((m) => m.en
 const choisi = ref(null)
 watch(() => props.mois, () => { choisi.value = null })
 const actif = computed(() => props.mois[choisi.value ?? indexCourant.value])
+// Mois prévu : d'où viennent ses recettes et ses dépenses.
+const origine = computed(() => {
+  const m = actif.value
+  if (!m?.prevision) return ''
+  const moyenne = m.depenses_moyenne || 0
+  const recurrentes = m.depenses - moyenne
+  const dep = []
+  if (recurrentes > 0) dep.push(`${formatEuros(recurrentes)} de dépenses récurrentes`)
+  if (moyenne > 0) dep.push(`${formatEuros(moyenne)} de moyenne de tes autres dépenses`)
+  const phrases = []
+  if (props.recettesPrevues) phrases.push(`Recettes : ${props.recettesPrevues}.`)
+  phrases.push(dep.length ? `Dépenses : ${dep.join(' + ')}.` : 'Aucune dépense prévue.')
+  return phrases.join(' ')
+})
 const signe = (c) => `${c < 0 ? '−' : '+'} ${formatEuros(Math.abs(c))}`
 const majuscule = (s) => s.charAt(0).toUpperCase() + s.slice(1)
 const etat = (m) => (m.prevision ? 'prévision' : m.en_cours ? 'en cours' : 'réel')
@@ -261,12 +276,14 @@ function clavier(e, i) {
         <div><dt>Encaissé</dt><dd>+ {{ formatEuros(actif.encaisse) }}</dd></div>
         <div><dt>Dépenses</dt><dd>− {{ formatEuros(actif.depenses) }}</dd></div>
         <div><dt>Paiements URSSAF</dt><dd>− {{ formatEuros(actif.cotisations) }}</dd></div>
+        <p v-if="origine" class="origine">{{ origine }}</p>
         <div class="total"><dt>Sur le compte en fin de mois</dt><dd>{{ formatEuros(bornes[indexActif].fin) }}</dd></div>
       </dl>
       <dl v-else class="chiffres">
         <div><dt>Encaissé</dt><dd>{{ formatEuros(actif.encaisse) }}</dd></div>
         <div><dt>Dépenses</dt><dd>− {{ formatEuros(actif.depenses) }}</dd></div>
         <div><dt>Paiements URSSAF</dt><dd>− {{ formatEuros(actif.cotisations) }}</dd></div>
+        <p v-if="origine" class="origine">{{ origine }}</p>
         <div class="total"><dt>Solde du mois</dt><dd>{{ signe(actif.flux) }}</dd></div>
         <div v-if="actif.solde_fin !== undefined"><dt>Sur le compte en fin de mois</dt><dd>{{ formatEuros(actif.solde_fin) }}</dd></div>
       </dl>
@@ -330,6 +347,7 @@ svg { display: block; touch-action: pan-y; }
 .detail .chiffres div { border-bottom: 0; padding-bottom: 0; }
 .detail .total { border-top: 1px solid var(--lin); padding-top: var(--e2); font-weight: 600; }
 .detail .total dt { color: var(--encre); }
+.detail .origine { margin: 0; font-size: 13px; color: var(--pierre); }
 
 .tableau summary { cursor: pointer; color: var(--safran); font-weight: 500; font-size: 15px; min-height: 44px; display: flex; align-items: center; }
 .defile { overflow-x: auto; }
